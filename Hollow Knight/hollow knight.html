@@ -594,7 +594,56 @@
 
 <script>
     'use strict';
+// ─────────────────────────────────────────────
+//  PERSISTENT SOURCE PRELOAD
+// ─────────────────────────────────────────────
+(function () {
+  const BASE = 'https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/';
+const FILES = [
+  ...Array.from({length: 45}, (_, i) => `Build/hktruffled.data.part${i + 1}`),
+  'Build/hktruffled.wasm.part1',
+  'Build/hktruffled.wasm.part2',
+  'Build/hktruffled.framework.js',
+  'Build/hktruffled.loader.js',
+  ...Array.from({length: 501}, (_, i) => `StreamingAssets/sharedassets${i}.resource`),
+  'StreamingAssets/Prologue.mp4',
+  'StreamingAssets/Intro.mp4',
+  'StreamingAssets/FinalA.mp4',
+  'StreamingAssets/FinalB.mp4',
+  'StreamingAssets/FinalC.mp4',
+  'StreamingAssets/FinalD.mp4',
+  'StreamingAssets/FinalE.mp4',
+  'StreamingAssets/Blacksmith.mp4',
+  'StreamingAssets/CharmSlugKiss.mp4',
+  'StreamingAssets/Fountain.mp4',
+  'StreamingAssets/MaskShatter.mp4',
+  'StreamingAssets/MrMushroom.mp4',
+  'StreamingAssets/Nailsmith.mp4',
+  'StreamingAssets/NailsmithPaint.mp4',
+  'StreamingAssets/StagTunnelRun.mp4',
+  'StreamingAssets/Telescope.mp4',
+];
 
+  const _cache = new Map();
+  const queue = [...FILES];
+  let active = 0;
+  const CONCURRENCY = 6;
+
+  function pump() {
+    while (active < CONCURRENCY && queue.length) {
+      const path = queue.shift();
+      active++;
+      fetch(BASE + path, { priority: 'low' })
+        .then(r => r.ok ? r.arrayBuffer() : null)
+        .then(buf => { if (buf) _cache.set(path, buf); })
+        .catch(() => {})
+        .finally(() => { active--; pump(); });
+    }
+  }
+  pump();
+
+  window.__hkPreload = _cache;
+})();
     window.addEventListener('beforeunload', (event) => {
       // Cancel the event as stated by the standard.
       event.preventDefault();
@@ -1220,20 +1269,49 @@
     // ─────────────────────────────────────────────
     //  FETCH WITH CACHE
     // ─────────────────────────────────────────────
-    const TOTAL_MB=912.81; let _lb=0,_te=0;
+    const TOTAL_MB=1497.38; let _lb=0,_te=0;
     function setLoadSub(m){document.getElementById('loading-sub').textContent=m;}
     function setLoadPct(p){const v=Math.min(100,Math.round(p));document.getElementById('loading-bar').style.width=v+'%';document.getElementById('loading-pct').textContent=v+'%';}
 
-    async function fetchWithCache(path){
-      const cached=await getCached(path);
-      if(cached?.buf){_lb+=cached.buf.byteLength;setLoadPct(_lb/(_te||1)*100);return cached.buf;}
-      const resp=await fetch(path); if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${path}`);
-      const reader=resp.body.getReader(); const chunks=[];
-      while(true){const{done,value}=await reader.read();if(done)break;_lb+=value.length;chunks.push(value);setLoadPct(_lb/(_te||TOTAL_MB*1048576)*100);setLoadSub(`${(_lb/1048576).toFixed(1)} / ${TOTAL_MB} MB`);}
-      const buf=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0)); let off=0;
-      for(const c of chunks){buf.set(c,off);off+=c.length;}
-      return buf.buffer;
-    }
+// ─────────────────────────────────────────────
+//  FETCH WITH CACHE
+// ─────────────────────────────────────────────
+async function fetchWithCache(path) {
+  // 1. Warm preload buffer (already in memory, free after use)
+  if (window.__hkPreload?.has(path)) {
+    const buf = window.__hkPreload.get(path);
+    window.__hkPreload.delete(path);
+    _lb += buf.byteLength;
+    setLoadPct(_lb / (_te || 1) * 100);
+    return buf;
+  }
+
+  // 2. IndexedDB persistent cache
+  const cached = await getCached(path);
+  if (cached?.buf) {
+    _lb += cached.buf.byteLength;
+    setLoadPct(_lb / (_te || 1) * 100);
+    return cached.buf;
+  }
+
+  // 3. Network fetch with progress tracking
+  const resp = await fetch(path);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${path}`);
+  const reader = resp.body.getReader();
+  const chunks = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    _lb += value.length;
+    chunks.push(value);
+    setLoadPct(_lb / (_te || TOTAL_MB * 1048576) * 100);
+    setLoadSub(`${(_lb / 1048576).toFixed(1)} / ${TOTAL_MB} MB`);
+  }
+  const buf = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0));
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
+  return buf.buffer;
+}
 
     async function fetchPartsParallel(base,from,to){
       const paths=Array.from({length:to-from+1},(_,i)=>`${base}.part${from+i}`);
