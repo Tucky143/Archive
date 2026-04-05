@@ -784,7 +784,23 @@ function switchTab(name){
 }
 
 const cv  = document.getElementById('unity-canvas');
+// Update your video listener
 const hkv = document.getElementById('hkv');
+hkv.onended = () => {
+    hkv.style.display = 'none';
+    _cl("[HACK] Video ended. Triggering game resume...");
+    
+    // This tells Unity to move from the black screen to the next state
+    skipSendMsg(); 
+    
+    // Failsafe for Final Endings: If it's a "Final" clip, force a credit roll
+    if (hkv.src.toLowerCase().includes('final')) {
+        unityInstance.SendMessage('_GameManager', 'SendEvent', 'SHOW_CREDITS');
+    }
+    
+    csReset();
+};
+
 const fg  = document.getElementById('fps-graph');
 let unityInstance = null;
 
@@ -909,7 +925,27 @@ console.log=(...a)=>{
 };
 function skipKeys(){[{key:'Escape',code:'Escape',keyCode:27},{key:'Return',code:'Enter',keyCode:13},{key:' ',code:'Space',keyCode:32},{key:'z',code:'KeyZ',keyCode:90}].forEach(k=>{const o={...k,which:k.keyCode,bubbles:true,cancelable:true};cv.dispatchEvent(new KeyboardEvent('keydown',o));cv.dispatchEvent(new KeyboardEvent('keyup',o));});}
 function skipPointer(){const r=cv.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t=>cv.dispatchEvent(new MouseEvent(t,{clientX:cx,clientY:cy,bubbles:true,cancelable:true})));}
-function skipSendMsg(){if(!unityInstance)return;[['CinematicPlayer','FinishCinematic'],['CinematicPlayer','Skip'],['CutscenePlayer','Finished'],['CutscenePlayer','Skip'],['GameManager','CutsceneEnd'],['GameManager','SkipCinematic']].forEach(([o,m])=>{try{unityInstance.SendMessage(o,m);}catch(e){}});}
+// Add this to your main script block
+function skipSendMsg() {
+  if (!unityInstance) return;
+  
+  // Hollow Knight specific event names
+  const events = ['FINISHED', 'SKIP', 'END', 'DONE', 'CANCEL'];
+  
+  events.forEach(ev => {
+    try {
+      // We know _GameManager is the right object from your previous logs
+      unityInstance.SendMessage('_GameManager', 'SendEvent', ev);
+    } catch(e) {}
+  });
+
+  // Specifically for the endings to trigger Credits
+  try {
+    unityInstance.SendMessage('_GameManager', 'OnCinematicFinished');
+    unityInstance.SendMessage('CinematicPlayer', 'Finish');
+  } catch(e) {}
+}
+
 function skipGamepad(){const p=_gps.buttons;_gps.buttons=Array.from({length:17},()=>({pressed:true,touched:true,value:1}));setTimeout(()=>{_gps.buttons=p;},300);fireGP();}
 function skipAll(){skipKeys();skipPointer();skipSendMsg();skipGamepad();}
 
