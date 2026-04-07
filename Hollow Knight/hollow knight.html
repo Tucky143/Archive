@@ -417,8 +417,11 @@ body{background:#000;overflow:hidden;font-family:'Fira Code',monospace;font-size
   window.XMLHttpRequest=function(){
     const xhr=new _X(),_o=xhr.open.bind(xhr),_s=xhr.send.bind(xhr);
     let stream=false,oa;
-    xhr.open=(...a)=>{stream=/sharedassets|resources\.resource/.test(a[1]||'');oa=a;if(!stream)_o(...a);};
-    xhr.send=b=>{
+    xhr.open=(...a)=>{
+      const u=a[1]||'';
+      stream=/sharedassets|resources\.resource/.test(u)&&!/\.mp4/i.test(u);
+      oa=a;if(!stream)_o(...a);
+    };    xhr.send=b=>{
       if(!stream){_s(b);return;}
       Q.push(()=>{
         _o(...oa);
@@ -704,74 +707,104 @@ const fireGP=()=>{try{window.dispatchEvent(new GamepadEvent('gamepadconnected',{
 setTimeout(fireGP,2000);
 
 // ─── CUTSCENE ─────────────────────────────────────────
-const CMAP={
-  Prologue:'StreamingAssets/Prologue.mp4',Intro:'StreamingAssets/Intro.mp4',
-  FinalA:'StreamingAssets/FinalA.mp4',FinalB:'StreamingAssets/FinalB.mp4',
-  FinalC:'StreamingAssets/FinalC.mp4',FinalD:'StreamingAssets/FinalD.mp4',
-  FinalE:'StreamingAssets/FinalE.mp4',Blacksmith:'StreamingAssets/Blacksmith.mp4',
-  CharmSlugKiss:'StreamingAssets/CharmSlugKiss.mp4',Fountain:'StreamingAssets/Fountain.mp4',
-  MaskShatter:'StreamingAssets/MaskShatter.mp4',MrMushroom:'StreamingAssets/MrMushroom.mp4',
-  Nailsmith:'StreamingAssets/Nailsmith.mp4',NailsmithPaint:'StreamingAssets/NailsmithPaint.mp4',
-  StagTunnelRun:'StreamingAssets/StagTunnelRun.mp4',Telescope:'StreamingAssets/Telescope.mp4',
-};
+// Known StreamingAssets mp4s for cache list + URL matching
+const CS_FILES=[
+  'Prologue','Intro','FinalA','FinalB','FinalC','FinalD','FinalE',
+  'Blacksmith','CharmSlugKiss','Fountain','MaskShatter','MrMushroom',
+  'Nailsmith','NailsmithPaint','StagTunnelRun','Telescope',
+];
+const CS_URLS=Object.fromEntries(CS_FILES.map(n=>[n,`StreamingAssets/${n}.mp4`]));
 
-// State machine: idle → playing → done
+// State: idle → loading → playing → idle
 let csState='idle';
-let _csSkipQueued=false;
 
 hkv.addEventListener('ended',()=>{
   hkv.style.display='none';
   hkv.removeAttribute('src');
   hkv.load();
-  csState='done';
-  // Delay skip slightly — Unity needs a frame to process the video end
-  setTimeout(doSkipAll,80);
+  csState='idle';
+  // Give Unity one frame, then signal completion via all available methods
+  requestAnimationFrame(()=>setTimeout(doSkipAll,40));
 });
 
 hkv.addEventListener('error',()=>{
+  mlog('Video error — skipping','warn');
   hkv.style.display='none';
   csState='idle';
   doSkipAll();
 });
 
-function csPlay(name){
-  if(!CMAP[name]||csState==='playing')return;
-  csState='playing';
-  _csSkipQueued=false;
-  hkv.src=CMAP[name];
+function csPlay(url){
+  if(csState!=='idle')return;
+  csState='loading';
+  mlog('Playing cutscene: '+url.split('/').pop(),'info');
+  hkv.src=url;
   hkv.style.display='block';
   hkv.currentTime=0;
-  hkv.play().catch(()=>{csState='done';doSkipAll();});
+  hkv.play().then(()=>{csState='playing';}).catch(e=>{
+    mlog('Video play failed: '+e.message,'warn');
+    hkv.style.display='none';
+    csState='idle';
+    doSkipAll();
+  });
 }
 
 function doSkipAll(){
-  // Keys
-  const keys=[{key:'Escape',code:'Escape',keyCode:27},{key:'Return',code:'Enter',keyCode:13},{key:' ',code:'Space',keyCode:32},{key:'z',code:'KeyZ',keyCode:90}];
+  const keys=[
+    {key:'Escape',code:'Escape',keyCode:27},
+    {key:'Return',code:'Enter',keyCode:13},
+    {key:' ',code:'Space',keyCode:32},
+    {key:'z',code:'KeyZ',keyCode:90},
+  ];
   keys.forEach(k=>{
     const o={...k,which:k.keyCode,bubbles:true,cancelable:true};
     cv.dispatchEvent(new KeyboardEvent('keydown',o));
-    cv.dispatchEvent(new KeyboardEvent('keyup',o));
+    setTimeout(()=>cv.dispatchEvent(new KeyboardEvent('keyup',o)),30);
   });
-  // Pointer
   const r=cv.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-  ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t=>cv.dispatchEvent(new MouseEvent(t,{clientX:cx,clientY:cy,bubbles:true,cancelable:true})));
-  // Gamepad
-  const saved=[..._gps.buttons];
+  ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t=>{
+    cv.dispatchEvent(new MouseEvent(t,{clientX:cx,clientY:cy,bubbles:true,cancelable:true}));
+  });
+  const saved=_gps.buttons.map(b=>({...b}));
   _gps.buttons=Array.from({length:17},()=>({pressed:true,touched:true,value:1}));
-  setTimeout(()=>{_gps.buttons=saved;},250);fireGP();
-  // Reset state after giving skip time to register
-  setTimeout(()=>{csState='idle';},500);
+  setTimeout(()=>{_gps.buttons=saved;},200);
+  fireGP();
 }
 
-// Console intercept — detect cutscene start
-const _cl=console.log.bind(console);
-console.log=(...a)=>{
-  const m=a.join(' ');
-  // Match: Started cinematic 'Name' OR "Playing cinematic Name"
-  const match=m.match(/(?:Started|Playing)\s+cinematic\s+'?(\w+)'?/i);
-  if(match&&csState==='idle'){csPlay(match[1]);}
-  if(/Stopped\s+cinematic/i.test(m)){hkv.style.display='none';hkv.pause();csState='idle';}
-  _cl(...a);
+// ─── FETCH INTERCEPT (cutscene detection) ─────────────
+// Unity requests the mp4 via fetch when the VideoPlayer component
+// tries to load a StreamingAssets URL. We intercept that request,
+// play it ourselves, and return an empty response so Unity's
+// broken WebGL video player gets nothing and stays quiet.
+const _fetch=window.fetch.bind(window);
+window.fetch=function(input,...rest){
+  const url=typeof input==='string'?input:(input instanceof Request?input.url:String(input));
+  const mp4=url.match(/StreamingAssets\/(\w+)\.mp4/i);
+  if(mp4){
+    const name=mp4[1];
+    // Only intercept known cutscene files, not in-game embedded clips
+    if(CS_URLS[name]){
+      csPlay(url);
+      // Return a fake fulfilled response so Unity doesn't hang or retry
+      return Promise.resolve(new Response(new Uint8Array(0),{
+        status:200,headers:{'Content-Type':'video/mp4','Content-Length':'0'}
+      }));
+    }
+  }
+  return _fetch(input,...rest);
+};
+
+// Also patch XHR for the same — some Unity versions use XHR for video
+// We extend the existing XHR throttle wrapper's open() to also catch mp4s
+const _xhrOpen_orig=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(method,url,...rest){
+  const mp4=(url||'').match(/StreamingAssets\/(\w+)\.mp4/i);
+  if(mp4&&CS_URLS[mp4[1]]){
+    csPlay(url);
+    // Redirect to a 0-byte data URL so XHR completes without error
+    url='data:video/mp4;base64,';
+  }
+  return _xhrOpen_orig.call(this,method,url,...rest);
 };
 
 // ─── CACHE ────────────────────────────────────────────
@@ -780,7 +813,7 @@ const GAME_FILES=[
   ...Array.from({length:45},(_,i)=>`Build/hktruffled.data.part${i+1}`),
   'Build/hktruffled.wasm.part1','Build/hktruffled.wasm.part2',
   'Build/hktruffled.framework.js','Build/hktruffled.loader.js',
-  ...Object.values(CMAP),
+  ...Object.values(CS_URLS),
 ];
 
 let _cdb=null;
