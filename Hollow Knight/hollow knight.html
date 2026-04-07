@@ -1,898 +1,692 @@
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
-    <base href="https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/">
-    <meta charset="utf-8">
-    <title>Hollow Knight</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Share+Tech+Mono&display=swap');
+<base href="https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/">
+<meta charset="utf-8">
+<title>Hollow Knight</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Fira+Code:wght@300;400&display=swap');
 
-        :root {
-          --gold:   #c8a96e;
-          --gold2:  #e8c98e;
-          --dark:   #0a0a0a;
-          --panel:  #0d0d0d;
-          --border: #1a1a1a;
-          --border2:#222;
-          --text:   #4a4a4a;
-          --text2:  #333;
-          --dim:    #222;
-          --red:    #ef5350;
-          --green:  #4caf50;
-          --orange: #ffa726;
-          --blue:   #5c9cf5;
-          --purple: #9c6ef5;
-        }
+:root {
+  --gold:#c8a96e;--gold2:#e8c98e;--ink:#080808;--panel:#0b0b0b;
+  --rim:#1e1e1e;--rim2:#282828;--muted:#3a3a3a;--dim:#222;
+  --ok:#4caf50;--bad:#ef5350;--warn:#ffa726;--info:#5c9cf5;
+  --r:2px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Fira Code',monospace;font-size:11px}
 
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{background:#000;overflow:hidden;font-family:'Share Tech Mono',monospace}
+/* ── LOADING ── */
+#ls{position:fixed;inset:0;background:#000;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+#ls-icon{font-size:32px;color:var(--gold);animation:breathe 2.4s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.3;transform:scale(.94)}50%{opacity:1;transform:scale(1)}}
+#ls h1{color:var(--gold);font:600 20px 'Cinzel',serif;letter-spacing:6px}
+#ls-bar{width:260px;height:1px;background:#181818;position:relative}
+#ls-fill{height:100%;background:var(--gold);width:0%;transition:width .12s;position:relative}
+#ls-fill::after{content:'';position:absolute;right:-1px;top:-2px;width:2px;height:5px;background:var(--gold2);box-shadow:0 0 6px var(--gold)}
+#ls-pct{color:var(--muted);font-size:9px;letter-spacing:2px}
+#ls-sub{color:var(--dim);font-size:9px;letter-spacing:1.5px;min-height:12px}
 
-        /* ── LOADING ── */
-        #loading-screen{
-          position:fixed;inset:0;background:#000;z-index:500;
-          display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-        }
-        #load-sigil{font-size:36px;animation:pulse 2s ease-in-out infinite;color:var(--gold);margin-bottom:4px}
-        @keyframes pulse{0%,100%{opacity:.4;transform:scale(.96)}50%{opacity:1;transform:scale(1)}}
-        #loading-title{color:var(--gold);font:22px 'Cinzel',serif;letter-spacing:5px;text-transform:uppercase}
-        #loading-sub{color:var(--text2);font:10px 'Share Tech Mono',monospace;letter-spacing:2px;min-height:14px;text-align:center}
-        #loading-bar-wrap{width:280px;height:2px;background:#111;border-radius:1px;position:relative;overflow:visible}
-        #loading-bar{height:100%;background:var(--gold);border-radius:1px;width:0%;transition:width .15s;position:relative}
-        #loading-bar::after{content:'';position:absolute;right:-1px;top:-3px;width:3px;height:8px;background:var(--gold2);border-radius:1px;box-shadow:0 0 6px var(--gold)}
-        #loading-pct{color:var(--text2);font:9px 'Share Tech Mono',monospace;letter-spacing:2px}
+/* ── CANVAS / VIDEO ── */
+#unity-canvas{display:block;position:absolute;top:0;left:0;image-rendering:pixelated}
+#hkv{position:fixed;inset:0;width:100vw;height:100vh;object-fit:cover;z-index:99998;display:none}
 
-        /* ── CANVAS ── */
-        #unity-canvas{display:block;position:absolute;top:0;left:0;image-rendering:pixelated}
-        #unity-mobile-warning{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;background:rgba(0,0,0,.92);padding:20px;border-radius:4px;font:13px 'Share Tech Mono',monospace;z-index:300;border:1px solid var(--border2);letter-spacing:.5px}
-        #hkv{position:fixed;top:0;left:0;width:100vw;height:100vh;object-fit:cover;z-index:99998;display:none}
+/* ── FPS ── */
+#fps{position:fixed;top:10px;left:10px;width:180px;height:56px;background:rgba(6,6,6,.95);border:1px solid var(--rim);border-radius:var(--r);padding:6px;z-index:9999;display:none}
+#fps canvas{width:100%;height:100%;display:block}
 
-        /* ── FPS ── */
-        #fps-graph{position:fixed;top:12px;left:12px;width:188px;height:64px;background:rgba(8,8,8,.92);border:1px solid var(--border);border-radius:3px;padding:8px;z-index:9999;display:none;box-shadow:0 2px 12px rgba(0,0,0,.7)}
-        #fps-canvas{width:100%;height:100%;display:block}
+/* ── PILL ── */
+#pill{position:fixed;bottom:10px;left:10px;padding:2px 8px;background:rgba(0,0,0,.85);border:1px solid var(--rim);border-radius:var(--r);font-size:9px;color:var(--muted);z-index:9999;pointer-events:none;letter-spacing:.5px;transition:.3s}
+#pill.cached{color:var(--ok);border-color:#4caf5033}
+#pill.partial{color:var(--warn);border-color:#ffa72633}
+#pill.caching{color:var(--info);border-color:#5c9cf533}
 
-        /* ── TAB HANDLE ── */
-        #panel-tab{position:fixed;right:0;top:50%;transform:translateY(-50%);width:8px;height:32px;background:#0f0f0f;border:1px solid var(--border2);border-right:none;border-radius:3px 0 0 3px;cursor:pointer;z-index:100001;display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s}
-        #panel-tab:hover{background:#161616;border-color:var(--gold)33}
-        #panel-tab svg{transition:transform .3s}
-        #panel-tab.open svg{transform:rotate(180deg)}
+/* ── HANDLE ── */
+#handle{position:fixed;right:0;top:50%;transform:translateY(-50%);width:7px;height:28px;background:var(--panel);border:1px solid var(--rim2);border-right:none;border-radius:3px 0 0 3px;cursor:pointer;z-index:100001;display:flex;align-items:center;justify-content:center;transition:.15s}
+#handle:hover{border-color:#c8a96e44}
+#handle svg{transition:transform .3s}
+#handle.open svg{transform:rotate(180deg)}
 
-        /* ── PANEL SHELL ── */
-        #panel{position:fixed;right:0;top:0;width:270px;height:100vh;background:var(--panel);border-left:1px solid var(--border);z-index:100000;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);overflow:hidden}
-        #panel.open{transform:translateX(0)}
+/* ── PANEL ── */
+#panel{position:fixed;right:0;top:0;width:256px;height:100vh;background:var(--panel);border-left:1px solid var(--rim);z-index:100000;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
+#panel.open{transform:none}
 
-        /* panel header */
-        #ph{padding:14px 14px 0;flex-shrink:0;background:linear-gradient(180deg,#111 0%,var(--panel) 100%);border-bottom:1px solid var(--border)}
-        #ph-top{display:flex;align-items:center;gap:10px;padding-bottom:10px}
-        #ph-sigil{font-size:18px;line-height:1;color:var(--gold);flex-shrink:0}
-        #ph-titles{flex:1;min-width:0}
-        #ph-titles h2{color:var(--gold);font:13px 'Cinzel',serif;letter-spacing:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        #ph-titles p{color:var(--dim);font-size:8px;letter-spacing:1.5px;margin-top:1px}
+/* header */
+#ph{padding:12px 12px 0;flex-shrink:0;border-bottom:1px solid var(--rim)}
+#ph-top{display:flex;align-items:center;gap:8px;padding-bottom:10px}
+#ph-top span{font-size:16px;color:var(--gold)}
+#ph-top h2{color:var(--gold);font:700 12px 'Cinzel',serif;letter-spacing:2px;flex:1}
+#ph-top p{color:var(--dim);font-size:8px;letter-spacing:1px}
 
-        /* ── TABS ── */
-        #tabs{display:flex;gap:0;flex-shrink:0;background:var(--dark)}
-        .tab{flex:1;padding:8px 4px;text-align:center;cursor:pointer;font:8px 'Share Tech Mono',monospace;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid transparent;transition:color .15s,border-color .15s,background .15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .tab:hover{color:var(--text);background:#0f0f0f}
-        .tab.active{color:var(--gold);border-bottom-color:var(--gold);background:var(--panel)}
+/* tabs */
+#tabs{display:flex;background:var(--ink)}
+.tab{flex:1;padding:7px 2px;text-align:center;cursor:pointer;font-size:8px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid transparent;transition:.12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab:hover{color:#666}
+.tab.on{color:var(--gold);border-bottom-color:var(--gold);background:var(--panel)}
 
-        /* ── TAB PAGES ── */
-        #tab-pages{flex:1;overflow:hidden;position:relative}
-        .tab-page{position:absolute;inset:0;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent;opacity:0;pointer-events:none;transition:opacity .15s}
-        .tab-page.active{opacity:1;pointer-events:auto}
+/* pages */
+#pages{flex:1;overflow:hidden;position:relative}
+.page{position:absolute;inset:0;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;opacity:0;pointer-events:none;transition:opacity .12s;scrollbar-width:thin;scrollbar-color:var(--rim) transparent}
+.page.on{opacity:1;pointer-events:auto}
+.page::-webkit-scrollbar{width:2px}
+.page::-webkit-scrollbar-thumb{background:var(--rim)}
 
-        /* ── SECTION ── */
-        .sec{display:flex;flex-direction:column;gap:0}
-        .sec-lbl{color:var(--text2);font:8px 'Cinzel',serif;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-        .sec-lbl .lbl-main{display:flex;align-items:center;gap:5px}
-        .sec-lbl .lbl-icon{font-size:10px;opacity:.6}
-        .sec-lbl .sec-act{color:var(--dim);cursor:pointer;font:8px 'Share Tech Mono',monospace;letter-spacing:1px;transition:.1s;flex-shrink:0}
-        .sec-lbl .sec-act:hover{color:var(--gold)}
+/* section */
+.sec{display:flex;flex-direction:column;gap:0}
+.slbl{color:var(--muted);font:8px 'Cinzel',serif;letter-spacing:1.5px;text-transform:uppercase;padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid var(--rim);display:flex;justify-content:space-between;align-items:center}
+.slbl-act{color:var(--dim);cursor:pointer;font:8px 'Fira Code',monospace;letter-spacing:.5px;transition:.1s}
+.slbl-act:hover{color:var(--gold)}
 
-        /* ── PRESETS ── */
-        .preset-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:5px}
-        .preset-grid.wide{grid-template-columns:repeat(3,1fr)}
-        .qb{padding:6px 2px;background:#0f0f0f;color:var(--dim);border:1px solid var(--border);border-radius:2px;cursor:pointer;font:8px 'Share Tech Mono',monospace;text-align:center;transition:.12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;flex-direction:column;align-items:center;gap:2px}
-        .qb .q-icon{font-size:11px;line-height:1}
-        .qb .q-name{font-size:7px;letter-spacing:.5px}
-        .qb:hover{background:#141414;color:#666;border-color:var(--border2)}
-        .qb.active{background:#141414;color:var(--gold);border-color:#c8a96e33;box-shadow:0 0 8px #c8a96e0a}
-        .qb.tier-low.active{color:#ffa726;border-color:#ffa72633}
-        .qb.tier-high.active{color:#5c9cf5;border-color:#5c9cf533}
-        .qb.tier-ultra.active{color:#9c6ef5;border-color:#9c6ef533}
-        .qb.tier-cinema.active{color:#ef5350;border-color:#ef535033}
+/* preset grid */
+.pgrid{display:grid;gap:3px;margin-bottom:4px}
+.pgrid.c4{grid-template-columns:repeat(4,1fr)}
+.pgrid.c3{grid-template-columns:repeat(3,1fr)}
+.qb{padding:6px 2px;background:#0d0d0d;color:var(--muted);border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:8px 'Fira Code',monospace;text-align:center;transition:.1s;display:flex;flex-direction:column;align-items:center;gap:2px}
+.qb .qi{font-size:11px;line-height:1}
+.qb .qn{font-size:7px;letter-spacing:.4px}
+.qb:hover{color:#666;background:#111}
+.qb.on{color:var(--gold);border-color:#c8a96e33;background:#111}
+.qb.lo.on{color:var(--warn);border-color:#ffa72633}
+.qb.hi.on{color:var(--info);border-color:#5c9cf533}
 
-        /* ── SLIDERS ── */
-        .sl-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #0e0e0e}
-        .sl-lbl{color:var(--text2);font:9px 'Share Tech Mono',monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.3px}
-        .sl{width:80px;flex-shrink:0;-webkit-appearance:none;height:2px;background:#1e1e1e;border-radius:1px;outline:none;cursor:pointer}
-        .sl::-webkit-slider-thumb{-webkit-appearance:none;width:8px;height:8px;border-radius:50%;background:var(--gold);cursor:pointer;box-shadow:0 0 4px #c8a96e44}
-        .sl::-moz-range-thumb{width:8px;height:8px;border-radius:50%;background:var(--gold);border:none;cursor:pointer}
-        .sl-val{color:var(--gold);font:9px 'Share Tech Mono',monospace;width:38px;text-align:right;flex-shrink:0;white-space:nowrap}
+/* row base */
+.row{display:flex;align-items:center;padding:3px 0;border-bottom:1px solid #0d0d0d;gap:6px}
+.rl{color:var(--muted);font-size:9px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.2px}
+.badge{font-size:6px;color:var(--muted);background:#0f0f0f;border:1px solid var(--rim);border-radius:1px;padding:1px 3px;flex-shrink:0;letter-spacing:.4px}
+.badge.p{color:var(--warn);border-color:#ffa72618}
+.badge.q{color:var(--info);border-color:#5c9cf518}
 
-        /* ── TOGGLES ── */
-        .tog-row{display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid #0e0e0e;gap:6px}
-        .tog-lbl{color:var(--text2);font:9px 'Share Tech Mono',monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.3px}
-        .tog-badge{font-size:7px;color:var(--text2);background:#111;border:1px solid var(--border);border-radius:2px;padding:1px 3px;flex-shrink:0;letter-spacing:.5px}
-        .tog-badge.perf{color:#ffa726;border-color:#ffa72622}
-        .tog-badge.qual{color:#5c9cf5;border-color:#5c9cf522}
-        .tog-badge.new{color:#9c6ef5;border-color:#9c6ef522}
-        .tog{position:relative;width:26px;height:13px;flex-shrink:0}
-        .tog input{opacity:0;width:0;height:0;position:absolute}
-        .tog-sl{position:absolute;inset:0;background:#111;border:1px solid var(--border2);border-radius:7px;cursor:pointer;transition:.15s}
-        .tog-sl:before{content:'';position:absolute;width:9px;height:9px;left:1px;top:1px;background:#2a2a2a;border-radius:50%;transition:.15s}
-        .tog input:checked+.tog-sl{border-color:#c8a96e33}
-        .tog input:checked+.tog-sl:before{background:var(--gold);transform:translateX(13px);box-shadow:0 0 4px #c8a96e55}
+/* slider */
+.sl{-webkit-appearance:none;width:72px;height:1px;background:#202020;border-radius:1px;outline:none;cursor:pointer;flex-shrink:0}
+.sl::-webkit-slider-thumb{-webkit-appearance:none;width:8px;height:8px;border-radius:50%;background:var(--gold);cursor:pointer;box-shadow:0 0 4px #c8a96e44}
+.sl::-moz-range-thumb{width:8px;height:8px;border-radius:50%;background:var(--gold);border:none;cursor:pointer}
+.sv{color:var(--gold);font-size:9px;width:34px;text-align:right;flex-shrink:0;white-space:nowrap}
 
-        /* ── BUTTONS ── */
-        .mb{width:100%;padding:6px 10px;background:#0f0f0f;color:var(--text);border:1px solid var(--border);border-radius:2px;cursor:pointer;font:9px 'Share Tech Mono',monospace;letter-spacing:.5px;text-align:left;transition:.12s;display:flex;align-items:center;gap:7px;white-space:nowrap;overflow:hidden}
-        .mb:hover{background:#141414;color:var(--gold);border-color:#c8a96e2a}
-        .mb:disabled{opacity:.3;pointer-events:none}
-        .mb .ic{width:16px;text-align:center;flex-shrink:0;font-size:12px}
-        .mb .btn-lbl{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
-        .mb.ok:hover{color:var(--green);border-color:#4caf5022}
-        .mb.bad:hover{color:var(--red);border-color:#ef535022}
-        .mb.accent{color:#c8a96e44;border-color:#c8a96e1a}
-        .mb.accent:hover{color:var(--gold);border-color:#c8a96e44;background:#111}
-        .mb.warn-btn{color:#ffa72644;border-color:#ffa72622}
-        .mb.warn-btn:hover{color:var(--orange);border-color:#ffa72644;background:#111}
-        .g2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+/* toggle */
+.tog{position:relative;width:24px;height:12px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0;position:absolute}
+.tsl{position:absolute;inset:0;background:#111;border:1px solid var(--rim2);border-radius:6px;cursor:pointer;transition:.12s}
+.tsl:before{content:'';position:absolute;width:8px;height:8px;left:1px;top:1px;background:#2a2a2a;border-radius:50%;transition:.12s}
+.tog input:checked+.tsl{border-color:#c8a96e33}
+.tog input:checked+.tsl:before{background:var(--gold);transform:translateX(12px);box-shadow:0 0 4px #c8a96e55}
 
-        /* ── CACHE STATUS PILL (top of cache tab) ── */
-        #cache-status-bar{
-          display:flex;align-items:center;justify-content:space-between;
-          padding:6px 8px;background:#070707;border:1px solid var(--border);border-radius:2px;
-          font:8px 'Share Tech Mono',monospace;gap:6px;
-        }
-        #cache-status-label{color:var(--text2);flex:1}
-        #cache-status-pct{color:var(--gold);flex-shrink:0}
-        #cache-progress-wrap{height:2px;background:#111;border-radius:1px;overflow:hidden}
-        #cache-progress{height:100%;background:var(--gold);width:0%;transition:width .2s}
+/* buttons */
+.btn{width:100%;padding:5px 8px;background:#0d0d0d;color:var(--muted);border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:9px 'Fira Code',monospace;letter-spacing:.4px;text-align:left;transition:.1s;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden}
+.btn:hover{background:#121212;color:var(--gold);border-color:#c8a96e22}
+.btn:disabled{opacity:.25;pointer-events:none}
+.btn .bi{width:14px;text-align:center;flex-shrink:0;font-size:11px}
+.btn .bl{overflow:hidden;text-overflow:ellipsis;flex:1}
+.btn.ok:hover{color:var(--ok);border-color:#4caf5022}
+.btn.bad:hover{color:var(--bad);border-color:#ef535022}
+.btn.accent{color:#c8a96e33;border-color:#c8a96e18}
+.btn.accent:hover{color:var(--gold);border-color:#c8a96e33}
+.btn.warn:hover{color:var(--warn);border-color:#ffa72622}
+.btn.def{color:var(--info);border-color:#5c9cf622}
+.btn.def:hover{color:#7ab3ff;border-color:#5c9cf644}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:3px}
 
-        /* ── SAVE TAB REDESIGN ── */
-        .save-card{
-          background:#070707;border:1px solid var(--border);border-radius:2px;padding:8px;
-          display:flex;flex-direction:column;gap:6px;
-        }
-        .save-card-title{color:var(--gold);font:9px 'Cinzel',serif;letter-spacing:2px;text-transform:uppercase;margin-bottom:2px}
-        .save-card-desc{color:var(--text2);font:8px 'Share Tech Mono',monospace;letter-spacing:.3px;line-height:1.5}
-        .save-divider{height:1px;background:var(--border);margin:2px 0}
+/* info rows */
+.ir{display:flex;justify-content:space-between;padding:2px 0;font-size:8px}
+.ik{color:var(--dim)}
+.iv{color:var(--muted);text-align:right;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-        /* url input */
-        #url-row{display:flex;gap:4px}
-        #save-url{flex:1;min-width:0;background:#070707;border:1px solid var(--border);color:#666;padding:5px 7px;font:9px 'Share Tech Mono',monospace;border-radius:2px;outline:none}
-        #save-url:focus{border-color:#c8a96e33}
-        #save-url::placeholder{color:#1e1e1e}
-        #url-go{padding:5px 9px;background:#0f0f0f;color:var(--text);border:1px solid var(--border);border-radius:2px;cursor:pointer;font:9px 'Share Tech Mono',monospace;transition:.12s;white-space:nowrap;flex-shrink:0}
-        #url-go:hover{color:var(--gold);border-color:#c8a96e2a;background:#141414}
+/* divider */
+.div{display:flex;align-items:center;gap:6px;margin:3px 0;font:7px 'Cinzel',serif;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+.div::before,.div::after{content:'';flex:1;height:1px;background:var(--rim)}
 
-        /* drop zone */
-        #dz{border:1px dashed #1c1c1c;border-radius:2px;padding:10px;text-align:center;cursor:pointer;transition:.15s}
-        #dz:hover,#dz.drag{border-color:#c8a96e33;background:#c8a96e05}
-        #dz p{color:#2a2a2a;font:9px 'Share Tech Mono',monospace;letter-spacing:.4px}
-        #dz.has-file p{color:var(--gold)}
+/* cache bar */
+#cbar{display:flex;align-items:center;justify-content:space-between;padding:5px 7px;background:#070707;border:1px solid var(--rim);border-radius:var(--r);font-size:8px;gap:6px}
+#cbar-lbl{color:var(--muted);flex:1}
+#cbar-pct{color:var(--gold);flex-shrink:0}
+#cprog-wrap{height:1px;background:#111;border-radius:1px;overflow:hidden}
+#cprog{height:100%;background:var(--gold);width:0%;transition:width .2s}
 
-        /* ── LOG ── */
-        #mlog{background:#070707;border:1px solid #131313;border-radius:2px;padding:5px;height:90px;overflow-y:auto;font:9px 'Share Tech Mono',monospace;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-        .ll{padding:1.5px 0;color:#383838;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .ll.ok{color:var(--green)}.ll.err{color:var(--red)}.ll.warn{color:var(--orange)}.ll.hi{color:var(--gold)}.ll.info{color:var(--blue)}
+/* save card */
+.card{background:#070707;border:1px solid var(--rim);border-radius:var(--r);padding:7px;display:flex;flex-direction:column;gap:5px}
+.card-title{color:var(--gold);font:8px 'Cinzel',serif;letter-spacing:2px;text-transform:uppercase}
+.card-desc{color:var(--dim);font-size:8px;line-height:1.5;letter-spacing:.2px}
+#url-row{display:flex;gap:3px}
+#save-url{flex:1;background:#070707;border:1px solid var(--rim);color:#555;padding:4px 6px;font:9px 'Fira Code',monospace;border-radius:var(--r);outline:none;min-width:0}
+#save-url:focus{border-color:#c8a96e22}
+#save-url::placeholder{color:#1c1c1c}
+#url-go{padding:4px 8px;background:#0d0d0d;color:var(--muted);border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:9px 'Fira Code',monospace;transition:.1s;flex-shrink:0}
+#url-go:hover{color:var(--gold);border-color:#c8a96e22}
+#dz{border:1px dashed #1a1a1a;border-radius:var(--r);padding:10px;text-align:center;cursor:pointer;transition:.15s}
+#dz:hover,#dz.drag{border-color:#c8a96e33;background:#c8a96e05}
+#dz p{color:#252525;font-size:8px;letter-spacing:.4px}
+#dz.has-file p{color:var(--gold)}
 
-        /* ── OFFLINE PILL ── */
-        #offline-pill{position:fixed;bottom:10px;left:10px;padding:3px 8px;background:rgba(0,0,0,.88);border:1px solid var(--border);border-radius:2px;font:8px 'Share Tech Mono',monospace;color:var(--text2);z-index:9999;pointer-events:none;letter-spacing:.5px}
-        #offline-pill.cached{color:var(--green);border-color:#4caf5033}
-        #offline-pill.partial{color:var(--orange);border-color:#ffa72633}
-        #offline-pill.caching{color:var(--blue);border-color:#5c9cf533}
+/* default lock */
+#lock-banner{background:#c8a96e0a;border:1px solid #c8a96e22;border-radius:var(--r);padding:5px 8px;display:none;font-size:8px;color:#c8a96e88;letter-spacing:.4px;text-align:center}
+#lock-banner.visible{display:block}
 
-        /* ── DIVIDER ── */
-        .hdiv{display:flex;align-items:center;gap:8px;margin:4px 0;font:7px 'Cinzel',serif;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
-        .hdiv::before,.hdiv::after{content:'';flex:1;height:1px;background:var(--border)}
+/* log */
+#mlog{background:#070707;border:1px solid #111;border-radius:var(--r);padding:4px;height:80px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--rim) transparent}
+.ll{padding:1px 0;color:#2e2e2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:8px}
+.ll.ok{color:var(--ok)}.ll.err{color:var(--bad)}.ll.warn{color:var(--warn)}.ll.hi{color:var(--gold)}.ll.info{color:var(--info)}
 
-        /* ── INFO ROW ── */
-        .info-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;font:8px 'Share Tech Mono',monospace}
-        .info-key{color:var(--dim)}
-        .info-val{color:var(--text);text-align:right}
+/* chromebook note */
+#cb-note{background:#5c9cf50a;border:1px solid #5c9cf522;border-radius:var(--r);padding:6px 8px;font-size:8px;color:#5c9cf599;letter-spacing:.3px;line-height:1.6}
 
-        /* scrollbar */
-        .tab-page::-webkit-scrollbar{width:3px}
-        .tab-page::-webkit-scrollbar-track{background:transparent}
-        .tab-page::-webkit-scrollbar-thumb{background:var(--border)}
-    </style>
-    <script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+/* session toast */
+#session-toast{position:fixed;bottom:36px;left:10px;padding:4px 10px;background:rgba(0,0,0,.9);border:1px solid var(--warn);border-radius:var(--r);font-size:8px;color:var(--warn);z-index:9999;pointer-events:none;letter-spacing:.4px;opacity:0;transition:opacity .4s;display:none}
+#session-toast.show{opacity:1}
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
 </head>
 <body>
 
-<div id="loading-screen">
-    <div id="load-sigil">⚔</div>
-    <div id="loading-title">Hollow Knight</div>
-    <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
-    <div id="loading-pct">0%</div>
-    <div id="loading-sub">Awakening…</div>
+<div id="ls">
+  <div id="ls-icon">⚔</div>
+  <h1>Hollow Knight</h1>
+  <div id="ls-bar"><div id="ls-fill"></div></div>
+  <div id="ls-pct">0%</div>
+  <div id="ls-sub">Awakening…</div>
 </div>
 
-<div id="unity-mobile-warning">WebGL builds may not run on mobile devices</div>
 <canvas id="unity-canvas"></canvas>
 <video id="hkv" playsinline webkit-playsinline></video>
-<div id="fps-graph"><canvas id="fps-canvas"></canvas></div>
-<div id="offline-pill">○ not cached</div>
+<div id="fps"><canvas id="fpc"></canvas></div>
+<div id="pill">○ not cached</div>
+<div id="session-toast">⚠ Long session detected — a reload may help performance</div>
 
-<div id="panel-tab" onclick="togglePanel()">
-    <svg width="5" height="9" viewBox="0 0 8 14" fill="none">
-        <polyline points="6,1 2,7 6,13" stroke="#444" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
+<div id="handle" onclick="togglePanel()">
+  <svg width="5" height="9" viewBox="0 0 8 14" fill="none">
+    <polyline points="6,1 2,7 6,13" stroke="#444" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
 </div>
 
 <div id="panel">
-    <div id="ph">
-        <div id="ph-top">
-            <div id="ph-sigil">⚔</div>
-            <div id="ph-titles">
-                <h2>HK Tools</h2>
-                <p>The Knight's Configuration Vessel</p>
-            </div>
+  <div id="ph">
+    <div id="ph-top">
+      <span>⚔</span>
+      <div><h2>HK Tools</h2><p>Configuration Vessel</p></div>
+    </div>
+    <div id="tabs">
+      <div class="tab on"  data-t="pre"  onclick="tab('pre')">Preset</div>
+      <div class="tab"     data-t="cpu"  onclick="tab('cpu')">CPU</div>
+      <div class="tab"     data-t="mem"  onclick="tab('mem')">Memory</div>
+      <div class="tab"     data-t="gpu"  onclick="tab('gpu')">GPU</div>
+      <div class="tab"     data-t="cch"  onclick="tab('cch')">Cache</div>
+      <div class="tab"     data-t="sav"  onclick="tab('sav')">Save</div>
+      <div class="tab"     data-t="log"  onclick="tab('log')">Log</div>
+    </div>
+  </div>
+
+  <div id="pages">
+
+    <!-- PRESET -->
+    <div class="page on" id="page-pre">
+      <div id="cb-note">🖥 Chromebook detected — <strong>Chromebook Safe</strong> preset recommended for this hardware.</div>
+      <div id="lock-banner">🔒 Default mode active — all settings locked to Unity defaults</div>
+
+      <div class="sec">
+        <div class="slbl">Nightmare</div>
+        <div class="pgrid c3">
+          <button class="qb lo" data-q="potato"   onclick="applyPreset('potato')"  ><span class="qi">🪨</span><span class="qn">Potato</span></button>
+          <button class="qb lo" data-q="minimal"  onclick="applyPreset('minimal')" ><span class="qi">💀</span><span class="qn">Minimal</span></button>
+          <button class="qb lo" data-q="superlow" onclick="applyPreset('superlow')"><span class="qi">⬇</span><span class="qn">S.Low</span></button>
         </div>
-        <div id="tabs">
-            <div class="tab active" data-tab="presets" onclick="switchTab('presets')">Preset</div>
-            <div class="tab" data-tab="render"  onclick="switchTab('render')">Render</div>
-            <div class="tab" data-tab="webgl"   onclick="switchTab('webgl')">WebGL</div>
-            <div class="tab" data-tab="cache"   onclick="switchTab('cache')">Cache</div>
-            <div class="tab" data-tab="save"    onclick="switchTab('save')">Save</div>
-            <div class="tab" data-tab="log"     onclick="switchTab('log')">Log</div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Standard</div>
+        <div class="pgrid c4">
+          <button class="qb"    data-q="cbsafe" onclick="applyPreset('cbsafe')"><span class="qi">🖥</span><span class="qn">CB Safe</span></button>
+          <button class="qb"    data-q="low"    onclick="applyPreset('low')"   ><span class="qi">🕯</span><span class="qn">Low</span></button>
+          <button class="qb on" data-q="medium" onclick="applyPreset('medium')"><span class="qi">🌙</span><span class="qn">Medium</span></button>
+          <button class="qb hi" data-q="high"   onclick="applyPreset('high')"  ><span class="qi">⭐</span><span class="qn">High</span></button>
         </div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Actions</div>
+        <button class="btn accent" onclick="autoOptimize()"><span class="bi">🔮</span><span class="bl">Auto-Detect Best Preset</span></button>
+        <button class="btn def"    onclick="toggleDefault()"><span class="bi">🔒</span><span class="bl" id="def-lbl">Lock to Unity Defaults</span></button>
+        <button class="btn warn"   onclick="turboGC()"      ><span class="bi">🧹</span><span class="bl">Force GC / Free Memory</span></button>
+      </div>
+      <div class="sec">
+        <div class="slbl">Device</div>
+        <div class="ir"><span class="ik">CPU Cores</span><span class="iv" id="inf-cores">—</span></div>
+        <div class="ir"><span class="ik">Est. RAM</span><span class="iv" id="inf-ram">—</span></div>
+        <div class="ir"><span class="ik">GPU</span><span class="iv" id="inf-gpu">—</span></div>
+        <div class="ir"><span class="ik">Active Preset</span><span class="iv" id="inf-pre">—</span></div>
+        <div class="ir"><span class="ik">Heap Used</span><span class="iv" id="inf-heap">—</span></div>
+      </div>
     </div>
 
-    <div id="tab-pages">
+    <!-- CPU -->
+    <div class="page" id="page-cpu">
+      <div class="sec">
+        <div class="slbl">Frame Rate</div>
+        <div class="row"><span class="rl">FPS Cap</span><input type="range" class="sl" id="fps-cap" min="0" max="7" step="1" value="0"><span class="sv" id="fps-cap-v">∞</span></div>
+        <div class="row"><span class="rl">Frame Pacing</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-pace" onchange="S('framePacing',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Threading</div>
+        <div class="row"><span class="rl">SIMD</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-simd" onchange="S('simd',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Capture Keyboard</span><label class="tog"><input type="checkbox" id="tog-kbd" onchange="S('captureAllKeyboardInput',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Sticky Cursor Lock</span><label class="tog"><input type="checkbox" id="tog-sticky" onchange="S('stickyCursorLock',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Particles</div>
+        <div class="row"><span class="rl">Particle Budget <span style="color:var(--dim)">(cosmetic)</span></span><input type="range" class="sl" id="particle-b" min="0" max="4" step="1" value="2"><span class="sv" id="particle-b-v">512</span></div>
+        <div class="row"><span class="rl">Disable Particles</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-nopart" onchange="S('disableParticles',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+    </div>
 
-        <!-- ═══════════════ PRESETS TAB ═══════════════ -->
-        <div class="tab-page active" id="page-presets">
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">💀</span> Nightmare</span></div>
-                <div class="preset-grid wide">
-                    <button class="qb tier-low" data-q="potato"   onclick="applyPreset('potato')">  <span class="q-icon">🪨</span><span class="q-name">Potato</span></button>
-                    <button class="qb tier-low" data-q="minimal"  onclick="applyPreset('minimal')"> <span class="q-icon">💀</span><span class="q-name">Minimal</span></button>
-                    <button class="qb tier-low" data-q="superlow" onclick="applyPreset('superlow')"><span class="q-icon">⬇</span><span class="q-name">S.Low</span></button>
-                </div>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">⚔</span> Standard</span></div>
-                <div class="preset-grid">
-                    <button class="qb" data-q="low"    onclick="applyPreset('low')">   <span class="q-icon">🕯</span><span class="q-name">Low</span></button>
-                    <button class="qb" data-q="medium" onclick="applyPreset('medium')"><span class="q-icon">🌙</span><span class="q-name">Medium</span></button>
-                    <button class="qb active" data-q="high" onclick="applyPreset('high')"><span class="q-icon">⭐</span><span class="q-name">High</span></button>
-                    <button class="qb" data-q="ultra"  onclick="applyPreset('ultra')"> <span class="q-icon">✨</span><span class="q-name">Ultra</span></button>
-                </div>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">👑</span> Radiance</span></div>
-                <div class="preset-grid wide">
-                    <button class="qb tier-ultra"  data-q="extreme"   onclick="applyPreset('extreme')">  <span class="q-icon">🔥</span><span class="q-name">Extreme</span></button>
-                    <button class="qb tier-cinema" data-q="cinematic" onclick="applyPreset('cinematic')"><span class="q-icon">👁</span><span class="q-name">Cinematic</span></button>
-                    <button class="qb tier-cinema" data-q="radiance"  onclick="applyPreset('radiance')"> <span class="q-icon">☀</span><span class="q-name">Radiance</span></button>
-                </div>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">🔍</span> Auto-Detect</span></div>
-                <button class="mb accent" onclick="autoOptimize()"><span class="ic">🔮</span><span class="btn-lbl">Match Device Performance</span></button>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">📊</span> Device Info</span></div>
-                <div class="info-row"><span class="info-key">CPU Cores</span><span class="info-val" id="info-cores">—</span></div>
-                <div class="info-row"><span class="info-key">Est. RAM</span><span class="info-val" id="info-ram">—</span></div>
-                <div class="info-row"><span class="info-key">GPU</span><span class="info-val" id="info-gpu" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px">—</span></div>
-                <div class="info-row"><span class="info-key">Active Preset</span><span class="info-val" id="info-preset">—</span></div>
-            </div>
+    <!-- MEMORY -->
+    <div class="page" id="page-mem">
+      <div class="sec">
+        <div class="slbl">Heap</div>
+        <div class="row"><span class="rl">Heap Size (MB)</span><input type="range" class="sl" id="mem-sl" min="64" max="1024" step="64" value="256"><span class="sv" id="mem-v">256</span></div>
+        <p style="color:var(--dim);font-size:8px;padding:3px 0;line-height:1.5;letter-spacing:.2px">Changes require a page reload to take effect. Recommended: 192–384 MB on Chromebook.</p>
+        <button class="btn warn" onclick="reloadWithMem()"><span class="bi">🔄</span><span class="bl">Apply & Reload</span></button>
+      </div>
+      <div class="sec">
+        <div class="slbl">WebGL Context</div>
+        <div class="row"><span class="rl">Depth Buffer</span><label class="tog"><input type="checkbox" id="tog-depth" onchange="S('depth',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Stencil Buffer</span><label class="tog"><input type="checkbox" id="tog-stencil" onchange="S('stencil',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Preserve Draw Buffer</span><label class="tog"><input type="checkbox" id="tog-pdb" onchange="S('preserveDrawingBuffer',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Desynchronized</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-desync" onchange="S('desynchronized',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Pressure Monitor</div>
+        <div class="row"><span class="rl">Auto-Drop Res at 85% Heap</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-mempres" onchange="S('memPressure',this.checked)"><span class="tsl"></span></label></div>
+        <div class="ir"><span class="ik">Heap Used</span><span class="iv" id="heap-live">—</span></div>
+        <div class="ir"><span class="ik">Heap Limit</span><span class="iv" id="heap-limit">—</span></div>
+      </div>
+    </div>
+
+    <!-- GPU -->
+    <div class="page" id="page-gpu">
+      <div class="sec">
+        <div class="slbl">Resolution</div>
+        <div class="row"><span class="rl">Render Scale</span><input type="range" class="sl" id="res-sl" min="0" max="8" step="1" value="5"><span class="sv" id="res-v">50%</span></div>
+        <div class="row"><span class="rl">DPI Scale</span><input type="range" class="sl" id="dpi-sl" min="1" max="30" step="1" value="10"><span class="sv" id="dpi-v">1.0×</span></div>
+        <div class="row"><span class="rl">High-Performance GPU</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-hpgpu" onchange="S('powerPreference',this.checked?'high-performance':'default')"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Anti-Aliasing</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-aa" onchange="S('antialias',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Shadows</div>
+        <div class="row"><span class="rl">Enable Shadows</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-shad" onchange="S('shadows',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Shadow Quality</span><input type="range" class="sl" id="shad-q" min="0" max="3" step="1" value="1"><span class="sv" id="shad-q-v">Low</span></div>
+        <div class="row"><span class="rl">Soft Shadows</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-soft" onchange="S('softShadows',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Post FX</div>
+        <div class="row"><span class="rl">Bloom</span><label class="tog"><input type="checkbox" id="tog-bloom" onchange="S('bloom',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Bloom Intensity</span><input type="range" class="sl" id="bloom-i" min="0" max="10" step="1" value="3"><span class="sv" id="bloom-i-v">0.3</span></div>
+        <div class="row"><span class="rl">Vignette</span><label class="tog"><input type="checkbox" id="tog-vig" onchange="S('vignette',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Color Grading</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-lut" onchange="S('colorGrading',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Motion Blur</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-mb" onchange="S('motionBlur',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Disable All Post FX</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-nopost" onchange="S('disablePostFX',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Textures</div>
+        <div class="row"><span class="rl">Texture Quality</span><input type="range" class="sl" id="tex-q" min="0" max="3" step="1" value="2"><span class="sv" id="tex-q-v">½</span></div>
+        <div class="row"><span class="rl">Anisotropic Filtering</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-af" onchange="S('anisotropicFiltering',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Normal Maps</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-norm" onchange="S('normalMaps',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+    </div>
+
+    <!-- CACHE -->
+    <div class="page" id="page-cch">
+      <div class="sec">
+        <div class="slbl">Background Cache</div>
+        <div id="cbar"><span id="cbar-lbl">Checking…</span><span id="cbar-pct">—</span></div>
+        <div id="cprog-wrap"><div id="cprog"></div></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Status</div>
+        <div class="ir"><span class="ik">Files Cached</span><span class="iv" id="cc-count">—</span></div>
+        <div class="ir"><span class="ik">Total Files</span><span class="iv" id="cc-total">—</span></div>
+        <div class="ir"><span class="ik">State</span><span class="iv" id="cc-state">—</span></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Manage</div>
+        <button class="btn bad" onclick="clearCache()"><span class="bi">🗑</span><span class="bl">Clear All Cached Files</span></button>
+      </div>
+    </div>
+
+    <!-- SAVE -->
+    <div class="page" id="page-sav">
+      <div class="card">
+        <div class="card-title">⬇ Back Up Save</div>
+        <div class="card-desc">Downloads your current in-game progress. Do this before clearing browser data.</div>
+        <button class="btn ok" onclick="doDownloadSave()"><span class="bi">⬇</span><span class="bl">Download Save File</span></button>
+      </div>
+      <div class="card">
+        <div class="card-title">⬆ Restore Save</div>
+        <div class="card-desc">Drop your save file or click to browse, then inject.</div>
+        <div id="dz"><p id="dz-lbl">Drop hk-save.json here or click</p></div>
+        <input type="file" id="fi" accept=".json,.dat" style="display:none">
+        <button class="btn ok" id="inj-btn" onclick="doInjectSave()" disabled><span class="bi">⬆</span><span class="bl">Inject Save & Reload</span></button>
+      </div>
+      <div class="card">
+        <div class="card-title">🔗 Load from URL</div>
+        <div class="card-desc">Paste a link to an hk-save.json and download it.</div>
+        <div id="url-row">
+          <input id="save-url" placeholder="https://…/hk-save.json" type="url">
+          <button id="url-go" onclick="fetchAndSaveHK()">Fetch</button>
         </div>
+      </div>
+    </div>
 
-        <!-- ═══════════════ RENDER TAB ═══════════════ -->
-        <div class="tab-page" id="page-render">
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">🖥</span> Resolution</span></div>
-                <div class="sl-row"><span class="sl-lbl">Render Scale</span><input type="range" class="sl" id="res-slider" min="0" max="10" step="1" value="6"><span class="sl-val" id="res-val">75%</span></div>
-                <div class="sl-row"><span class="sl-lbl">DPI Scale</span><input type="range" class="sl" id="dpi-slider" min="1" max="40" step="1" value="10"><span class="sl-val" id="dpi-val">1.0×</span></div>
-                <div class="sl-row"><span class="sl-lbl">Render Dist.</span><input type="range" class="sl" id="rend-dist" min="0" max="4" step="1" value="2"><span class="sl-val" id="rend-dist-val">Med</span></div>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">💡</span> Lighting</span></div>
-                <div class="tog-row"><span class="tog-lbl">Real-time Shadows</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-shadows" checked onchange="saveSetting('shadows',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">Shadow Quality</span><input type="range" class="sl" id="shadow-q" min="0" max="4" step="1" value="2"><span class="sl-val" id="shadow-q-val">Med</span></div>
-                <div class="sl-row"><span class="sl-lbl">Shadow Distance</span><input type="range" class="sl" id="shadow-dist" min="0" max="4" step="1" value="2"><span class="sl-val" id="shadow-dist-val">Med</span></div>
-                <div class="tog-row"><span class="tog-lbl">Soft Shadows</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-soft-shadows" checked onchange="saveSetting('softShadows',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Ambient Occlusion</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-ao" onchange="saveSetting('ambientOcclusion',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Indirect Lighting</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-gi" onchange="saveSetting('globalIllumination',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Light Probes</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-probes" checked onchange="saveSetting('lightProbes',this.checked)"><span class="tog-sl"></span></label></div>
-            </div>
-            <div class="hdiv">Ray Tracing</div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">🔆</span> RT Pipeline</span><span class="tog-badge new">new</span></div>
-                <div class="tog-row"><span class="tog-lbl">RT Shadows</span><span class="tog-badge new">new</span><label class="tog"><input type="checkbox" id="tog-rt-shadows" onchange="saveSetting('rtShadows',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">RT Reflections</span><span class="tog-badge new">new</span><label class="tog"><input type="checkbox" id="tog-rt-reflect" onchange="saveSetting('rtReflections',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">RT Ambient Occlusion</span><span class="tog-badge new">new</span><label class="tog"><input type="checkbox" id="tog-rt-ao" onchange="saveSetting('rtAO',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">RT Global Illumination</span><span class="tog-badge new">new</span><label class="tog"><input type="checkbox" id="tog-rt-gi" onchange="saveSetting('rtGI',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">RT Caustics</span><span class="tog-badge new">new</span><label class="tog"><input type="checkbox" id="tog-rt-caustics" onchange="saveSetting('rtCaustics',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">RT Bounces</span><input type="range" class="sl" id="rt-bounces" min="1" max="8" step="1" value="2"><span class="sl-val" id="rt-bounces-val">2</span></div>
-                <div class="sl-row"><span class="sl-lbl">RT Samples</span><input type="range" class="sl" id="rt-samples" min="1" max="8" step="1" value="2"><span class="sl-val" id="rt-samples-val">4</span></div>
-            </div>
-            <div class="hdiv">Post Processing</div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">🎨</span> Effects</span></div>
-                <div class="tog-row"><span class="tog-lbl">Bloom</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-bloom" checked onchange="saveSetting('bloom',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">Bloom Intensity</span><input type="range" class="sl" id="bloom-int" min="0" max="10" step="1" value="4"><span class="sl-val" id="bloom-int-val">0.4</span></div>
-                <div class="tog-row"><span class="tog-lbl">Depth of Field</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-dof" onchange="saveSetting('dof',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Motion Blur</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-mb" onchange="saveSetting('motionBlur',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">Motion Blur Samples</span><input type="range" class="sl" id="mb-samples" min="1" max="8" step="1" value="2"><span class="sl-val" id="mb-samples-val">4</span></div>
-                <div class="tog-row"><span class="tog-lbl">Chromatic Aberration</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-ca" onchange="saveSetting('chromaticAberration',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Film Grain</span><label class="tog"><input type="checkbox" id="tog-grain" onchange="saveSetting('filmGrain',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Vignette</span><label class="tog"><input type="checkbox" id="tog-vignette" checked onchange="saveSetting('vignette',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Color Grading</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-lut" checked onchange="saveSetting('colorGrading',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Screen Space Reflections</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-ssr" onchange="saveSetting('ssr',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Volumetric Fog</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-fog" onchange="saveSetting('volumetricFog',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">Volumetric Steps</span><input type="range" class="sl" id="fog-steps" min="4" max="64" step="4" value="16"><span class="sl-val" id="fog-steps-val">16</span></div>
-                <div class="tog-row"><span class="tog-lbl">Lens Flare</span><label class="tog"><input type="checkbox" id="tog-flare" onchange="saveSetting('lensFlare',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Subsurface Scattering</span><span class="tog-badge new">new</span><label class="tog"><input type="checkbox" id="tog-sss" onchange="saveSetting('subsurfaceScattering',this.checked)"><span class="tog-sl"></span></label></div>
-            </div>
-            <div class="hdiv">Textures & Geometry</div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">🗺</span> Texture</span></div>
-                <div class="sl-row"><span class="sl-lbl">Texture Quality</span><input type="range" class="sl" id="tex-q" min="0" max="4" step="1" value="3"><span class="sl-val" id="tex-q-val">High</span></div>
-                <div class="tog-row"><span class="tog-lbl">Anisotropic Filtering</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-af" checked onchange="saveSetting('anisotropicFiltering',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">AF Level</span><input type="range" class="sl" id="af-level" min="1" max="16" step="1" value="4"><span class="sl-val" id="af-level-val">4×</span></div>
-                <div class="tog-row"><span class="tog-lbl">Normal Maps</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-normals" checked onchange="saveSetting('normalMaps',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Displacement Maps</span><span class="tog-badge new">new</span><label class="tog"><input type="checkbox" id="tog-displace" onchange="saveSetting('displacementMaps',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">LOD Bias</span><input type="range" class="sl" id="lod-bias" min="0" max="8" step="1" value="4"><span class="sl-val" id="lod-bias-val">1.0</span></div>
-                <div class="tog-row"><span class="tog-lbl">Mesh Decimation</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-lod" onchange="saveSetting('meshDecimation',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">Particle Budget</span><input type="range" class="sl" id="particle-b" min="0" max="6" step="1" value="3"><span class="sl-val" id="particle-b-val">1k</span></div>
-            </div>
-            <div class="hdiv">Performance Trims</div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">⚡</span> Aggressive Cuts</span></div>
-                <div class="tog-row"><span class="tog-lbl">Disable All Shaders</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-no-shaders" onchange="saveSetting('disableShaders',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Disable Particles</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-no-particles" onchange="saveSetting('disableParticles',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Disable Post FX</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-no-postfx" onchange="saveSetting('disablePostFX',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Skip Culling</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-no-cull" onchange="saveSetting('skipCulling',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Disable Lighting</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-no-light" onchange="saveSetting('disableLighting',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Static Batching Only</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-static-batch" onchange="saveSetting('staticBatchingOnly',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Frustum Culling Only</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-frustum" onchange="saveSetting('frustumCullingOnly',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Reduce Draw Calls</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-draw-calls" onchange="saveSetting('reduceDrawCalls',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Disable Reflections</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-no-reflect" onchange="saveSetting('disableReflections',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="sl-row"><span class="sl-lbl">Target FPS Cap</span><input type="range" class="sl" id="fps-cap" min="0" max="7" step="1" value="0"><span class="sl-val" id="fps-cap-val">∞</span></div>
-            </div>
-        </div>
+    <!-- LOG -->
+    <div class="page" id="page-log">
+      <div class="sec">
+        <div class="slbl">Output <span class="slbl-act" onclick="clearLog()">clear</span></div>
+        <div id="mlog"></div>
+      </div>
+    </div>
 
-        <!-- ═══════════════ WEBGL TAB ═══════════════ -->
-        <div class="tab-page" id="page-webgl">
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">🔷</span> Context</span></div>
-                <div class="tog-row"><span class="tog-lbl">Anti-Aliasing</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-aa" onchange="saveSetting('antialias',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Depth Buffer</span><label class="tog"><input type="checkbox" id="tog-depth" checked onchange="saveSetting('depth',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Stencil Buffer</span><label class="tog"><input type="checkbox" id="tog-stencil" onchange="saveSetting('stencil',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Premultiply Alpha</span><label class="tog"><input type="checkbox" id="tog-pma" onchange="saveSetting('premultipliedAlpha',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Preserve Draw Buffer</span><label class="tog"><input type="checkbox" id="tog-pdb" onchange="saveSetting('preserveDrawingBuffer',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Desynchronized</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-desync" checked onchange="saveSetting('desynchronized',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">High Performance GPU</span><span class="tog-badge qual">qual</span><label class="tog"><input type="checkbox" id="tog-power" checked onchange="saveSetting('powerPreference',this.checked?'high-performance':'default')"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Match Canvas Size</span><label class="tog"><input type="checkbox" id="tog-matchcanvas" checked onchange="saveSetting('matchWebGLToCanvasSize',this.checked)"><span class="tog-sl"></span></label></div>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">🧠</span> Memory</span></div>
-                <div class="sl-row"><span class="sl-lbl">Heap (MB)</span><input type="range" class="sl" id="mem-slider" min="64" max="1536" step="64" value="384"><span class="sl-val" id="mem-val">384</span></div>
-                <div class="tog-row"><span class="tog-lbl">Enable SharedArrayBuffer</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-sab" onchange="saveSetting('sharedArrayBuffer',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Enable SIMD</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-simd" checked onchange="saveSetting('simd',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">GC Aggressive Mode</span><span class="tog-badge perf">perf</span><label class="tog"><input type="checkbox" id="tog-gc" onchange="saveSetting('aggressiveGC',this.checked)"><span class="tog-sl"></span></label></div>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">⌨</span> Input</span></div>
-                <div class="tog-row"><span class="tog-lbl">Capture All Keyboard</span><label class="tog"><input type="checkbox" id="tog-kbd" checked onchange="saveSetting('captureAllKeyboardInput',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Mobile Keyboard</span><label class="tog"><input type="checkbox" id="tog-mobkbd" checked onchange="saveSetting('mobileKeyboard',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Sticky Cursor Lock</span><label class="tog"><input type="checkbox" id="tog-sticky" checked onchange="saveSetting('stickyCursorLock',this.checked)"><span class="tog-sl"></span></label></div>
-                <div class="tog-row"><span class="tog-lbl">Pointer Lock on Click</span><label class="tog"><input type="checkbox" id="tog-ptlock" onchange="saveSetting('pointerLockOnClick',this.checked)"><span class="tog-sl"></span></label></div>
-            </div>
-        </div>
-
-        <!-- ═══════════════ CACHE TAB ═══════════════ -->
-        <div class="tab-page" id="page-cache">
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">💾</span> Background Cache</span></div>
-                <div id="cache-status-bar">
-                    <span id="cache-status-label">Checking…</span>
-                    <span id="cache-status-pct">—</span>
-                </div>
-                <div id="cache-progress-wrap"><div id="cache-progress"></div></div>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">📊</span> Status</span></div>
-                <div class="info-row"><span class="info-key">Files Cached</span><span class="info-val" id="cache-count">—</span></div>
-                <div class="info-row"><span class="info-key">Total Files</span><span class="info-val" id="cache-total">—</span></div>
-                <div class="info-row"><span class="info-key">State</span><span class="info-val" id="cache-state-lbl">—</span></div>
-            </div>
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">🗑</span> Manage</span></div>
-                <button class="mb bad" onclick="clearCache()"><span class="ic">🗑</span><span class="btn-lbl">Clear All Cached Files</span></button>
-            </div>
-        </div>
-
-        <!-- ═══════════════ SAVE TAB ═══════════════ -->
-        <div class="tab-page" id="page-save">
-
-            <!-- DOWNLOAD -->
-            <div class="save-card">
-                <div class="save-card-title">⬇ Back Up Your Save</div>
-                <div class="save-card-desc">Downloads your current in-game progress as a file you can keep. Do this before clearing your browser data.</div>
-                <button class="mb ok" onclick="doDownloadSave()"><span class="ic">⬇</span><span class="btn-lbl">Download Save File</span></button>
-            </div>
-
-            <!-- IMPORT -->
-            <div class="save-card">
-                <div class="save-card-title">⬆ Restore a Save</div>
-                <div class="save-card-desc">Drop your saved file below (or click to browse), then hit Inject to load it into the game.</div>
-                <div id="dz"><p id="dz-lbl">Drop hk-save.json here or click to browse</p></div>
-                <input type="file" id="fi" accept=".json,.dat" style="display:none">
-                <button class="mb ok" id="inj-btn" onclick="doInjectSave()" disabled style="opacity:.3">
-                    <span class="ic">⬆</span><span class="btn-lbl">Inject Save & Reload Game</span>
-                </button>
-            </div>
-
-            <!-- FETCH FROM URL -->
-            <div class="save-card">
-                <div class="save-card-title">🔗 Load Save from URL</div>
-                <div class="save-card-desc">Paste a direct link to an hk-save.json file and download it to your device.</div>
-                <div id="url-row">
-                    <input id="save-url" placeholder="https://…/hk-save.json" type="url">
-                    <button id="url-go" onclick="fetchAndSaveHK()">Fetch</button>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- ═══════════════ LOG TAB ═══════════════ -->
-        <div class="tab-page" id="page-log">
-            <div class="sec">
-                <div class="sec-lbl"><span class="lbl-main"><span class="lbl-icon">📋</span> Output</span><span class="sec-act" onclick="clearLog()">clear</span></div>
-                <div id="mlog"></div>
-            </div>
-        </div>
-
-    </div><!-- /tab-pages -->
-</div><!-- /panel -->
+  </div>
+</div>
 
 <script>
 'use strict';
 
-// ═══════════════════════════════════════════════════════
-//  WEBMEDIAPLAYER POOL GUARD
-//  Chrome caps WebMediaPlayers at ~75. Pool + reuse to stay under.
-// ═══════════════════════════════════════════════════════
-(function () {
-  const POOL_SIZE = 48;
-  const _pool = [];
-  const _used = new WeakSet();
-
-  for (let i = 0; i < POOL_SIZE; i++) {
-    const el = document.createElement('audio');
-    el.preload = 'none';
-    _pool.push(el);
-  }
-
-  function acquire() {
-    for (const el of _pool) {
-      if (!_used.has(el) && el.paused && el.readyState === 0) return el;
-    }
-    for (const el of _pool) {
-      if (el.paused) { el.pause(); el.src = ''; el.load(); _used.delete(el); return el; }
-    }
-    const el = _pool[0];
-    el.pause(); el.src = ''; el.load(); _used.delete(el);
-    return el;
-  }
-
-  const _NativeAudio = window.Audio;
-  window.Audio = function (src) {
-    const el = acquire(); _used.add(el);
-    if (src) el.src = src;
-    return el;
+// ─── AUDIO POOL ───────────────────────────────────────
+(()=>{
+  const SZ=48,pool=[],used=new WeakSet();
+  for(let i=0;i<SZ;i++){const e=document.createElement('audio');e.preload='none';pool.push(e);}
+  const get=()=>{
+    for(const e of pool)if(!used.has(e)&&e.paused&&e.readyState===0)return e;
+    for(const e of pool)if(e.paused){e.pause();e.src='';e.load();used.delete(e);return e;}
+    pool[0].pause();pool[0].src='';pool[0].load();used.delete(pool[0]);return pool[0];
   };
-  Object.assign(window.Audio, _NativeAudio);
-
-  const _nativeCE = document.createElement.bind(document);
-  document.createElement = function (tag, ...args) {
-    if (tag.toLowerCase() === 'audio') { const el = acquire(); _used.add(el); return el; }
-    return _nativeCE(tag, ...args);
+  const NA=window.Audio;
+  window.Audio=function(src){const e=get();used.add(e);if(src)e.src=src;return e;};
+  Object.assign(window.Audio,NA);
+  const nCE=document.createElement.bind(document);
+  document.createElement=(t,...a)=>{
+    if(t.toLowerCase()==='audio'){const e=get();used.add(e);return e;}
+    return nCE(t,...a);
   };
-
-  for (const el of _pool) {
-    el.addEventListener('ended',  () => _used.delete(el));
-    el.addEventListener('error',  () => { el.src = ''; _used.delete(el); });
-    el.addEventListener('emptied',() => _used.delete(el));
+  for(const e of pool){
+    e.addEventListener('ended',()=>used.delete(e));
+    e.addEventListener('error',()=>{e.src='';used.delete(e);});
+    e.addEventListener('emptied',()=>used.delete(e));
   }
 })();
 
-// ═══════════════════════════════════════════════════════
-//  XHR THROTTLE — prevents jsDelivr 403s on sharedassets
-//  Unity fetches sharedassets via XHR from repo root.
-// ═══════════════════════════════════════════════════════
-(function () {
-  const _XHR = window.XMLHttpRequest;
-  const _queue = [];
-  let _active = 0;
-  const XHR_CONCURRENCY = 4;
-  const XHR_DELAY_MS    = 80;
-
-  function drain() {
-    if (_active >= XHR_CONCURRENCY || !_queue.length) return;
-    _active++;
-    _queue.shift()();
-  }
-
-  window.XMLHttpRequest = function () {
-    const xhr = new _XHR();
-    const _open = xhr.open.bind(xhr);
-    const _send = xhr.send.bind(xhr);
-    let _streaming = false, _openArgs;
-
-    xhr.open = function (...args) {
-      const url = String(args[1] || '');
-      _streaming = url.includes('sharedassets') || url.includes('resources.resource');
-      _openArgs = args;
-      if (!_streaming) _open(...args);
+// ─── XHR THROTTLE ─────────────────────────────────────
+(()=>{
+  const _X=window.XMLHttpRequest,Q=[],CON=3,DELAY=100;
+  let act=0;
+  const drain=()=>{if(act>=CON||!Q.length)return;act++;Q.shift()();};
+  window.XMLHttpRequest=function(){
+    const xhr=new _X(),_o=xhr.open.bind(xhr),_s=xhr.send.bind(xhr);
+    let stream=false,oa;
+    xhr.open=(...a)=>{stream=/sharedassets|resources\.resource/.test(a[1]||'');oa=a;if(!stream)_o(...a);};
+    xhr.send=b=>{
+      if(!stream){_s(b);return;}
+      Q.push(()=>{
+        _o(...oa);
+        const done=()=>{act--;setTimeout(drain,DELAY);};
+        const ol=xhr.onload,oe=xhr.onerror;
+        xhr.onload=e=>{done();ol&&ol.call(xhr,e);};
+        xhr.onerror=e=>{done();oe&&oe.call(xhr,e);};
+        _s(b);
+      });drain();
     };
-
-    xhr.send = function (body) {
-      if (!_streaming) { _send(body); return; }
-      _queue.push(() => {
-        _open(..._openArgs);
-        const done = () => { _active--; setTimeout(drain, XHR_DELAY_MS); };
-        const _ol = xhr.onload, _oe = xhr.onerror, _orc = xhr.onreadystatechange;
-        xhr.onload  = e => { done(); _ol && _ol.call(xhr, e); };
-        xhr.onerror = e => { done(); _oe && _oe.call(xhr, e); };
-        _send(body);
-      });
-      drain();
-    };
-
     return xhr;
   };
-  Object.assign(window.XMLHttpRequest, _XHR);
+  Object.assign(window.XMLHttpRequest,_X);
 })();
 
-// ═══════════════════════════════════════════════════════
-//  PRELOAD IIFE — warms build files in memory
-//  (sharedassets go through XHR throttle above instead)
-// ═══════════════════════════════════════════════════════
-(function () {
-  const BASE = 'https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/';
-  const PRELOAD_FILES = [
-    ...Array.from({length: 45}, (_, i) => `Build/hktruffled.data.part${i + 1}`),
-    'Build/hktruffled.wasm.part1', 'Build/hktruffled.wasm.part2',
-    'Build/hktruffled.framework.js', 'Build/hktruffled.loader.js',
-    'StreamingAssets/Prologue.mp4','StreamingAssets/Intro.mp4',
-    'StreamingAssets/FinalA.mp4','StreamingAssets/FinalB.mp4',
-    'StreamingAssets/FinalC.mp4','StreamingAssets/FinalD.mp4',
-    'StreamingAssets/FinalE.mp4','StreamingAssets/Blacksmith.mp4',
-    'StreamingAssets/CharmSlugKiss.mp4','StreamingAssets/Fountain.mp4',
-    'StreamingAssets/MaskShatter.mp4','StreamingAssets/MrMushroom.mp4',
-    'StreamingAssets/Nailsmith.mp4','StreamingAssets/NailsmithPaint.mp4',
-    'StreamingAssets/StagTunnelRun.mp4','StreamingAssets/Telescope.mp4',
-  ];
+window.addEventListener('beforeunload',e=>{e.preventDefault();e.returnValue='';});
 
-  const _cache = new Map();
-  const queue  = [...PRELOAD_FILES];
-  let active   = 0;
-  const CONCURRENCY = 3;
-
-  function pump() {
-    while (active < CONCURRENCY && queue.length) {
-      const path = queue.shift();
-      active++;
-      fetch(BASE + path, { priority: 'low' })
-        .then(r => r.ok ? r.arrayBuffer() : null)
-        .then(buf => { if (buf) _cache.set(path, buf); })
-        .catch(() => {})
-        .finally(() => { active--; setTimeout(pump, 50); });
-    }
-  }
-  pump();
-  window.__hkPreload = _cache;
-})();
-
-window.addEventListener('beforeunload', e => { e.preventDefault(); e.returnValue = ''; });
-
-// ═══════════════════════════════════════════════════════
-//  SETTINGS
-// ═══════════════════════════════════════════════════════
-const SK = 'hk_cfg_v4';
-const DEFAULTS = {
-  resolution:6, dpiScale:1.0, matchWebGLToCanvasSize:true,
-  antialias:false, preserveDrawingBuffer:false, desynchronized:true,
-  depth:true, stencil:false, premultipliedAlpha:false, powerPreference:'high-performance',
-  captureAllKeyboardInput:true, mobileKeyboard:true, stickyCursorLock:true, pointerLockOnClick:false,
-  memory:384, sharedArrayBuffer:false, simd:true, aggressiveGC:false,
-  shadows:true, softShadows:true, shadowQuality:2, shadowDistance:2,
-  ambientOcclusion:false, globalIllumination:false, lightProbes:true,
-  rtShadows:false, rtReflections:false, rtAO:false, rtGI:false, rtCaustics:false, rtBounces:2, rtSamples:4,
-  bloom:true, bloomIntensity:0.4, dof:false, motionBlur:false, motionBlurSamples:4,
-  chromaticAberration:false, filmGrain:false, vignette:true, colorGrading:true,
-  ssr:false, volumetricFog:false, volumetricSteps:16, lensFlare:false, subsurfaceScattering:false,
-  textureQuality:3, anisotropicFiltering:true, afLevel:4,
-  normalMaps:true, displacementMaps:false, lodBias:1.0, meshDecimation:false,
-  particleBudget:1024, renderDistance:2,
-  disableShaders:false, disableParticles:false, disablePostFX:false,
-  skipCulling:false, disableLighting:false, staticBatchingOnly:false,
-  frustumCullingOnly:false, reduceDrawCalls:false, disableReflections:false,
-  fpsCap:0, preset:'high'
+// ─── CONFIG ───────────────────────────────────────────
+const SK='hk_cfg_v5';
+const DEF={
+  // cpu
+  fpsCap:0,framePacing:false,simd:true,captureAllKeyboardInput:true,stickyCursorLock:true,
+  disableParticles:false,particleBudget:512,
+  // memory
+  memory:256,depth:true,stencil:false,preserveDrawingBuffer:false,desynchronized:true,memPressure:false,
+  // gpu
+  resolution:5,dpiScale:1.0,powerPreference:'high-performance',antialias:false,
+  shadows:true,shadowQuality:1,softShadows:false,
+  bloom:true,bloomIntensity:0.3,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,
+  textureQuality:2,anisotropicFiltering:false,normalMaps:true,
+  // meta
+  preset:'medium',locked:false
 };
-let CFG = {...DEFAULTS};
-function loadCFG(){try{const s=localStorage.getItem(SK);if(s)CFG={...DEFAULTS,...JSON.parse(s)};}catch(e){}}
-function saveCFG(){try{localStorage.setItem(SK,JSON.stringify(CFG));}catch(e){}}
-function saveSetting(k,v){CFG[k]=v;saveCFG();}
+let C={...DEF};
+const load=()=>{try{const s=localStorage.getItem(SK);if(s)C={...DEF,...JSON.parse(s)};}catch(e){}};
+const save=()=>{try{localStorage.setItem(SK,JSON.stringify(C));}catch(e){}};
+const S=(k,v)=>{if(C.locked&&k!=='locked')return;C[k]=v;save();};
 
-// ═══════════════════════════════════════════════════════
-//  LOOKUP TABLES
-// ═══════════════════════════════════════════════════════
-const RES_STEPS=[
-  {v:0.10,l:'10%'},{v:0.17,l:'17%'},{v:0.25,l:'25%'},
-  {v:0.33,l:'33%'},{v:0.42,l:'42%'},{v:0.50,l:'50%'},
-  {v:0.67,l:'67%'},{v:0.75,l:'75%'},{v:0.85,l:'85%'},
-  {v:1.00,l:'100%'},{v:1.25,l:'125%'},{v:1.50,l:'150%'}
+// ─── LOOKUP TABLES ────────────────────────────────────
+const RES=[
+  {v:.10,l:'10%'},{v:.17,l:'17%'},{v:.25,l:'25%'},{v:.33,l:'33%'},
+  {v:.42,l:'42%'},{v:.50,l:'50%'},{v:.60,l:'60%'},{v:.75,l:'75%'},{v:1,l:'100%'}
 ];
-const SHADOW_Q_LBL=['Off','Low','Med','High','Ultra'];
-const DIST_LBL=['Off','Near','Med','Far','Extreme'];
-const TEX_Q_LBL=['1/8','1/4','1/2','Full','Ultra'];
-const PARTICLE_B=[64,256,512,1024,4096,16384,65536];
-const PARTICLE_B_LBL=['64','256','512','1k','4k','16k','64k'];
-const LOD_BIAS_V=[0.25,0.5,0.7,1.0,1.5,2.0,3.0,4.0,8.0];
-const RT_SAMPLES_V=[1,2,4,8,16,32,64,128];
-const FPS_CAP_V=[0,15,24,30,45,60,90,120];
-const FPS_CAP_LBL=['∞','15','24','30','45','60','90','120'];
-const MB_SAMPLES_V=[1,2,4,8,12,16,24,32];
+const SHAD=['Off','Low','Med','Ultra'];
+const TEX=['1/8','1/4','½','Full'];
+const PB=[64,256,512,1024,4096];
+const PBL=['64','256','512','1k','4k'];
+const FPS_V=[0,15,24,30,45,60,90,120];
+const FPS_L=['∞','15','24','30','45','60','90','120'];
 
-// ═══════════════════════════════════════════════════════
-//  PRESETS
-// ═══════════════════════════════════════════════════════
-const PRESETS = {
-  potato:{resolution:0,dpiScale:0.3,memory:64,antialias:false,depth:false,stencil:false,desynchronized:true,powerPreference:'default',preserveDrawingBuffer:false,premultipliedAlpha:false,shadows:false,softShadows:false,shadowQuality:0,shadowDistance:0,ambientOcclusion:false,globalIllumination:false,lightProbes:false,rtShadows:false,rtReflections:false,rtAO:false,rtGI:false,rtCaustics:false,bloom:false,dof:false,motionBlur:false,chromaticAberration:false,filmGrain:false,vignette:false,colorGrading:false,ssr:false,volumetricFog:false,lensFlare:false,subsurfaceScattering:false,textureQuality:0,anisotropicFiltering:false,afLevel:1,normalMaps:false,displacementMaps:false,lodBias:0.25,meshDecimation:true,particleBudget:64,renderDistance:0,disableShaders:true,disableParticles:true,disablePostFX:true,skipCulling:false,disableLighting:true,staticBatchingOnly:true,frustumCullingOnly:true,reduceDrawCalls:true,disableReflections:true,fpsCap:0},
-  minimal:{resolution:1,dpiScale:0.5,memory:128,antialias:false,depth:false,stencil:false,desynchronized:true,powerPreference:'default',preserveDrawingBuffer:false,premultipliedAlpha:false,shadows:false,softShadows:false,shadowQuality:0,shadowDistance:0,ambientOcclusion:false,globalIllumination:false,lightProbes:false,rtShadows:false,rtReflections:false,rtAO:false,rtGI:false,rtCaustics:false,bloom:false,dof:false,motionBlur:false,chromaticAberration:false,filmGrain:false,vignette:false,colorGrading:false,ssr:false,volumetricFog:false,lensFlare:false,subsurfaceScattering:false,textureQuality:0,anisotropicFiltering:false,afLevel:1,normalMaps:false,displacementMaps:false,lodBias:0.25,meshDecimation:true,particleBudget:64,renderDistance:0,disableShaders:false,disableParticles:true,disablePostFX:true,skipCulling:false,disableLighting:false,staticBatchingOnly:true,frustumCullingOnly:true,reduceDrawCalls:true,disableReflections:true,fpsCap:0},
-  superlow:{resolution:2,dpiScale:0.75,memory:128,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'default',preserveDrawingBuffer:false,premultipliedAlpha:false,shadows:false,softShadows:false,shadowQuality:0,shadowDistance:0,ambientOcclusion:false,globalIllumination:false,lightProbes:false,rtShadows:false,rtReflections:false,rtAO:false,rtGI:false,rtCaustics:false,bloom:false,dof:false,motionBlur:false,chromaticAberration:false,filmGrain:false,vignette:false,colorGrading:false,ssr:false,volumetricFog:false,lensFlare:false,subsurfaceScattering:false,textureQuality:1,anisotropicFiltering:false,afLevel:1,normalMaps:false,displacementMaps:false,lodBias:0.5,meshDecimation:true,particleBudget:256,renderDistance:0,disableShaders:false,disableParticles:false,disablePostFX:true,skipCulling:false,disableLighting:false,staticBatchingOnly:false,frustumCullingOnly:false,reduceDrawCalls:true,disableReflections:true,fpsCap:0},
-  low:{resolution:3,dpiScale:0.75,memory:256,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'default',preserveDrawingBuffer:false,premultipliedAlpha:false,shadows:true,softShadows:false,shadowQuality:0,shadowDistance:0,ambientOcclusion:false,globalIllumination:false,lightProbes:false,rtShadows:false,rtReflections:false,rtAO:false,rtGI:false,rtCaustics:false,bloom:false,dof:false,motionBlur:false,chromaticAberration:false,filmGrain:false,vignette:true,colorGrading:false,ssr:false,volumetricFog:false,lensFlare:false,subsurfaceScattering:false,textureQuality:1,anisotropicFiltering:false,afLevel:2,normalMaps:true,displacementMaps:false,lodBias:0.5,meshDecimation:false,particleBudget:256,renderDistance:1,disableShaders:false,disableParticles:false,disablePostFX:false,skipCulling:false,disableLighting:false,staticBatchingOnly:false,frustumCullingOnly:false,reduceDrawCalls:false,disableReflections:true,fpsCap:0},
-  medium:{resolution:5,dpiScale:1.0,memory:384,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'high-performance',preserveDrawingBuffer:false,premultipliedAlpha:false,shadows:true,softShadows:false,shadowQuality:1,shadowDistance:1,ambientOcclusion:false,globalIllumination:false,lightProbes:true,rtShadows:false,rtReflections:false,rtAO:false,rtGI:false,rtCaustics:false,bloom:true,bloomIntensity:0.3,dof:false,motionBlur:false,chromaticAberration:false,filmGrain:false,vignette:true,colorGrading:true,ssr:false,volumetricFog:false,lensFlare:false,subsurfaceScattering:false,textureQuality:2,anisotropicFiltering:true,afLevel:4,normalMaps:true,displacementMaps:false,lodBias:0.7,meshDecimation:false,particleBudget:1024,renderDistance:2,disableShaders:false,disableParticles:false,disablePostFX:false,skipCulling:false,disableLighting:false,staticBatchingOnly:false,frustumCullingOnly:false,reduceDrawCalls:false,disableReflections:false,fpsCap:0},
-  high:{resolution:7,dpiScale:1.0,memory:384,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'high-performance',preserveDrawingBuffer:false,premultipliedAlpha:false,shadows:true,softShadows:true,shadowQuality:2,shadowDistance:2,ambientOcclusion:false,globalIllumination:false,lightProbes:true,rtShadows:false,rtReflections:false,rtAO:false,rtGI:false,rtCaustics:false,bloom:true,bloomIntensity:0.4,dof:false,motionBlur:false,chromaticAberration:false,filmGrain:false,vignette:true,colorGrading:true,ssr:false,volumetricFog:false,lensFlare:false,subsurfaceScattering:false,textureQuality:3,anisotropicFiltering:true,afLevel:4,normalMaps:true,displacementMaps:false,lodBias:1.0,meshDecimation:false,particleBudget:4096,renderDistance:2,disableShaders:false,disableParticles:false,disablePostFX:false,skipCulling:false,disableLighting:false,staticBatchingOnly:false,frustumCullingOnly:false,reduceDrawCalls:false,disableReflections:false,fpsCap:0},
-  ultra:{resolution:9,dpiScale:1.0,memory:512,antialias:true,depth:true,stencil:false,desynchronized:true,powerPreference:'high-performance',preserveDrawingBuffer:false,premultipliedAlpha:false,shadows:true,softShadows:true,shadowQuality:3,shadowDistance:3,ambientOcclusion:true,globalIllumination:false,lightProbes:true,rtShadows:false,rtReflections:false,rtAO:false,rtGI:false,rtCaustics:false,bloom:true,bloomIntensity:0.5,dof:true,motionBlur:false,chromaticAberration:true,filmGrain:false,vignette:true,colorGrading:true,ssr:true,volumetricFog:false,lensFlare:true,subsurfaceScattering:false,textureQuality:3,anisotropicFiltering:true,afLevel:8,normalMaps:true,displacementMaps:false,lodBias:1.5,meshDecimation:false,particleBudget:16384,renderDistance:3,disableShaders:false,disableParticles:false,disablePostFX:false,skipCulling:false,disableLighting:false,staticBatchingOnly:false,frustumCullingOnly:false,reduceDrawCalls:false,disableReflections:false,fpsCap:0},
-  extreme:{resolution:10,dpiScale:1.5,memory:768,antialias:true,depth:true,stencil:true,desynchronized:true,powerPreference:'high-performance',preserveDrawingBuffer:false,premultipliedAlpha:false,shadows:true,softShadows:true,shadowQuality:4,shadowDistance:4,ambientOcclusion:true,globalIllumination:true,lightProbes:true,rtShadows:false,rtReflections:true,rtAO:true,rtGI:false,rtCaustics:false,rtBounces:3,rtSamples:8,bloom:true,bloomIntensity:0.6,dof:true,motionBlur:true,motionBlurSamples:8,chromaticAberration:true,filmGrain:true,vignette:true,colorGrading:true,ssr:true,volumetricFog:true,volumetricSteps:32,lensFlare:true,subsurfaceScattering:true,textureQuality:4,anisotropicFiltering:true,afLevel:16,normalMaps:true,displacementMaps:true,lodBias:2.0,meshDecimation:false,particleBudget:16384,renderDistance:4,disableShaders:false,disableParticles:false,disablePostFX:false,skipCulling:false,disableLighting:false,staticBatchingOnly:false,frustumCullingOnly:false,reduceDrawCalls:false,disableReflections:false,fpsCap:0},
-  cinematic:{resolution:11,dpiScale:2.0,memory:1024,antialias:true,depth:true,stencil:true,desynchronized:false,powerPreference:'high-performance',preserveDrawingBuffer:true,premultipliedAlpha:false,shadows:true,softShadows:true,shadowQuality:4,shadowDistance:4,ambientOcclusion:true,globalIllumination:true,lightProbes:true,rtShadows:true,rtReflections:true,rtAO:true,rtGI:true,rtCaustics:false,rtBounces:4,rtSamples:16,bloom:true,bloomIntensity:0.7,dof:true,motionBlur:true,motionBlurSamples:16,chromaticAberration:true,filmGrain:true,vignette:true,colorGrading:true,ssr:true,volumetricFog:true,volumetricSteps:64,lensFlare:true,subsurfaceScattering:true,textureQuality:4,anisotropicFiltering:true,afLevel:16,normalMaps:true,displacementMaps:true,lodBias:3.0,meshDecimation:false,particleBudget:65536,renderDistance:4,disableShaders:false,disableParticles:false,disablePostFX:false,skipCulling:false,disableLighting:false,staticBatchingOnly:false,frustumCullingOnly:false,reduceDrawCalls:false,disableReflections:false,fpsCap:0},
-  radiance:{resolution:11,dpiScale:2.0,memory:1536,antialias:true,depth:true,stencil:true,desynchronized:false,powerPreference:'high-performance',preserveDrawingBuffer:true,premultipliedAlpha:false,shadows:true,softShadows:true,shadowQuality:4,shadowDistance:4,ambientOcclusion:true,globalIllumination:true,lightProbes:true,rtShadows:true,rtReflections:true,rtAO:true,rtGI:true,rtCaustics:true,rtBounces:8,rtSamples:128,bloom:true,bloomIntensity:0.9,dof:true,motionBlur:true,motionBlurSamples:32,chromaticAberration:true,filmGrain:true,vignette:true,colorGrading:true,ssr:true,volumetricFog:true,volumetricSteps:64,lensFlare:true,subsurfaceScattering:true,textureQuality:4,anisotropicFiltering:true,afLevel:16,normalMaps:true,displacementMaps:true,lodBias:4.0,meshDecimation:false,particleBudget:65536,renderDistance:4,disableShaders:false,disableParticles:false,disablePostFX:false,skipCulling:false,disableLighting:false,staticBatchingOnly:false,frustumCullingOnly:false,reduceDrawCalls:false,disableReflections:false,fpsCap:0},
+// ─── PRESETS ──────────────────────────────────────────
+const PRESETS={
+  potato:{resolution:0,dpiScale:.4,memory:64,antialias:false,depth:false,stencil:false,desynchronized:true,powerPreference:'default',shadows:false,softShadows:false,shadowQuality:0,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
+  minimal:{resolution:1,dpiScale:.5,memory:128,antialias:false,depth:false,stencil:false,desynchronized:true,powerPreference:'default',shadows:false,softShadows:false,shadowQuality:0,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
+  superlow:{resolution:2,dpiScale:.75,memory:128,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'default',shadows:false,softShadows:false,shadowQuality:0,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:1,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:false,particleBudget:256},
+  cbsafe:{resolution:3,dpiScale:1,memory:192,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'default',shadows:false,softShadows:false,shadowQuality:0,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:30,disableParticles:false,particleBudget:256},
+  low:{resolution:3,dpiScale:.75,memory:192,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'default',shadows:true,softShadows:false,shadowQuality:0,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:256},
+  medium:{resolution:5,dpiScale:1,memory:256,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'high-performance',shadows:true,softShadows:false,shadowQuality:1,bloom:true,bloomIntensity:.3,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:2,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:512},
+  high:{resolution:7,dpiScale:1,memory:384,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'high-performance',shadows:true,softShadows:true,shadowQuality:2,bloom:true,bloomIntensity:.4,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:3,anisotropicFiltering:true,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:1024},
 };
 
-function applyPreset(name){
-  if(!PRESETS[name]) return;
-  Object.assign(CFG,PRESETS[name],{preset:name});
-  saveCFG(); syncUIFromCFG(); applyRenderRes();
-  mlog('Preset: '+name+' applied — reload to apply WebGL context changes','hi');
-  document.getElementById('info-preset').textContent=name;
+function applyPreset(n){
+  if(!PRESETS[n])return;
+  const wasLocked=C.locked;
+  C.locked=false;
+  Object.assign(C,PRESETS[n],{preset:n});
+  C.locked=wasLocked;
+  save();syncUI();applyRes();
+  mlog('Preset: '+n,'hi');
+  if(wasLocked)mlog('Preset applied but lock is active — unlock to persist changes','warn');
 }
 
-// ═══════════════════════════════════════════════════════
-//  AUTO-OPTIMIZE
-// ═══════════════════════════════════════════════════════
+// ─── DEFAULT LOCK ─────────────────────────────────────
+function toggleDefault(){
+  C.locked=!C.locked;
+  save();
+  document.getElementById('def-lbl').textContent=C.locked?'Unlock (Using Unity Defaults)':'Lock to Unity Defaults';
+  document.getElementById('lock-banner').classList.toggle('visible',C.locked);
+  mlog(C.locked?'Locked to Unity defaults — settings frozen':'Unlocked — custom settings active',C.locked?'warn':'ok');
+  syncUI();
+}
+
+// ─── AUTO-OPTIMIZE ────────────────────────────────────
 async function autoOptimize(){
   mlog('Benchmarking…','hi');
   let s=0;
-  const cores=navigator.hardwareConcurrency||2; s+=Math.min(cores,16)*3;
-  const ram=navigator.deviceMemory||1; s+=Math.min(ram,8)*5;
+  s+=Math.min(navigator.hardwareConcurrency||2,16)*3;
+  s+=Math.min(navigator.deviceMemory||1,8)*5;
   const cvt=document.createElement('canvas');
   const gl=cvt.getContext('webgl')||cvt.getContext('experimental-webgl');
-  let gpuStr='Unknown';
   if(gl){
     const ext=gl.getExtension('WEBGL_debug_renderer_info');
     if(ext){
-      gpuStr=gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)||'Unknown';
-      const r=gpuStr.toLowerCase();
-      if(/rtx\s*[4-9]\d{3}|rx\s*[78]\d{3}|m[34]\s*(pro|max|ultra)/.test(r))s+=70;
-      else if(/rtx\s*[23]\d{3}|rx\s*[56]\d{3}|m[12]\s*(pro|max)|m2/.test(r))s+=50;
-      else if(/rtx\s*[12]\d{3}|gtx\s*16|rx\s*[45]\d{2}|m1/.test(r))s+=35;
-      else if(/gtx\s*[89]\d{2}|gtx\s*10|intel\s*(iris\s*xe|arc)/.test(r))s+=20;
-      else if(/intel\s*(uhd|hd)|mali-g[7-9]\d|adreno\s*[6-7]\d{2}/.test(r))s+=8;
-      else s+=14;
+      const r=(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)||'').toLowerCase();
+      document.getElementById('inf-gpu').textContent=r||'unknown';
+      s+=/m[34]\s*(pro|max|ultra)|rtx\s*[4-9]/.test(r)?60:/m[12]\s*(pro|max)|rtx\s*[23]/.test(r)?40:/rtx\s*1|gtx\s*16|m1/.test(r)?25:/gtx\s*[89]00|gtx\s*10/.test(r)?15:/intel\s*(uhd|hd)|celeron|n40[0-9]{2}/.test(r)?4:10;
     }
-    document.getElementById('info-gpu').textContent=gpuStr;
   }
-  const t0=performance.now(); let x=0;
-  for(let i=0;i<6_000_000;i++) x=Math.sqrt(i*1.0001+x);
+  const t0=performance.now();let x=0;
+  for(let i=0;i<4e6;i++)x=Math.sqrt(i*1.0001+x);
   const el=performance.now()-t0;
-  s+= el<25?22: el<50?14: el<100?7: 2;
-  if(/iPhone|iPad|Android/i.test(navigator.userAgent)) s=Math.floor(s*0.5);
-  const chosen= s>=130?'radiance': s>=100?'cinematic': s>=75?'extreme': s>=55?'ultra': s>=38?'high': s>=22?'medium': s>=12?'low': s>=6?'superlow': 'potato';
+  s+=el<30?20:el<60?12:el<120?5:1;
+  if(/Android|iPhone|iPad/.test(navigator.userAgent))s=Math.floor(s*.5);
+  // Chromebook detection → bias toward cbsafe
+  if(/CrOS/.test(navigator.userAgent))s=Math.min(s,22);
+  const chosen=s>=55?'high':s>=35?'medium':s>=20?'low':s>=12?'cbsafe':s>=6?'superlow':'potato';
   mlog(`Score ${s} → ${chosen}`,'ok');
   applyPreset(chosen);
 }
 
-// ═══════════════════════════════════════════════════════
-//  SYNC UI
-// ═══════════════════════════════════════════════════════
-function syncUIFromCFG(){
-  document.querySelectorAll('.qb').forEach(b=>b.classList.toggle('active',b.dataset.q===CFG.preset));
-  const rs=document.getElementById('res-slider');
-  rs.max=RES_STEPS.length-1;
-  rs.value=Math.min(CFG.resolution,RES_STEPS.length-1);
-  document.getElementById('res-val').textContent=RES_STEPS[rs.value].l;
-  const di=Math.round(CFG.dpiScale*10);
-  document.getElementById('dpi-slider').value=di;
-  document.getElementById('dpi-val').textContent=(di/10).toFixed(1)+'×';
-  document.getElementById('mem-slider').value=CFG.memory;
-  document.getElementById('mem-val').textContent=CFG.memory;
-  slv('shadow-q',CFG.shadowQuality,SHADOW_Q_LBL);
-  slv('shadow-dist',CFG.shadowDistance,DIST_LBL);
-  slv('rend-dist',CFG.renderDistance,DIST_LBL);
-  const rbi=RT_SAMPLES_V.indexOf(CFG.rtBounces);
-  document.getElementById('rt-bounces').value=Math.max(0,rbi<0?1:rbi);
-  document.getElementById('rt-bounces-val').textContent=CFG.rtBounces;
-  const rsi=RT_SAMPLES_V.indexOf(CFG.rtSamples);
-  document.getElementById('rt-samples').value=Math.max(0,rsi<0?2:rsi);
-  document.getElementById('rt-samples-val').textContent=CFG.rtSamples;
-  document.getElementById('bloom-int').value=Math.round(CFG.bloomIntensity*10);
-  document.getElementById('bloom-int-val').textContent=CFG.bloomIntensity.toFixed(1);
-  const mbi=MB_SAMPLES_V.indexOf(CFG.motionBlurSamples);
-  document.getElementById('mb-samples').value=Math.max(0,mbi<0?2:mbi);
-  document.getElementById('mb-samples-val').textContent=CFG.motionBlurSamples;
-  document.getElementById('fog-steps').value=CFG.volumetricSteps;
-  document.getElementById('fog-steps-val').textContent=CFG.volumetricSteps;
-  slv('tex-q',CFG.textureQuality,TEX_Q_LBL);
-  document.getElementById('af-level').value=CFG.afLevel;
-  document.getElementById('af-level-val').textContent=CFG.afLevel+'×';
-  const lbi=LOD_BIAS_V.findIndex(v=>Math.abs(v-CFG.lodBias)<0.01);
-  document.getElementById('lod-bias').value=lbi<0?3:lbi;
-  document.getElementById('lod-bias-val').textContent=CFG.lodBias.toFixed(2);
-  const pbi=PARTICLE_B.indexOf(CFG.particleBudget);
-  document.getElementById('particle-b').value=pbi<0?3:pbi;
-  document.getElementById('particle-b-val').textContent=PARTICLE_B_LBL[pbi<0?3:pbi];
-  const fci=FPS_CAP_V.indexOf(CFG.fpsCap);
-  document.getElementById('fps-cap').value=fci<0?0:fci;
-  document.getElementById('fps-cap-val').textContent=FPS_CAP_LBL[fci<0?0:fci];
-  const togs={
-    'tog-matchcanvas':'matchWebGLToCanvasSize','tog-aa':'antialias','tog-pdb':'preserveDrawingBuffer',
-    'tog-desync':'desynchronized','tog-depth':'depth','tog-stencil':'stencil','tog-pma':'premultipliedAlpha',
-    'tog-power':null,'tog-kbd':'captureAllKeyboardInput','tog-mobkbd':'mobileKeyboard',
-    'tog-sticky':'stickyCursorLock','tog-ptlock':'pointerLockOnClick',
-    'tog-sab':'sharedArrayBuffer','tog-simd':'simd','tog-gc':'aggressiveGC',
-    'tog-shadows':'shadows','tog-soft-shadows':'softShadows','tog-ao':'ambientOcclusion',
-    'tog-gi':'globalIllumination','tog-probes':'lightProbes',
-    'tog-rt-shadows':'rtShadows','tog-rt-reflect':'rtReflections','tog-rt-ao':'rtAO',
-    'tog-rt-gi':'rtGI','tog-rt-caustics':'rtCaustics',
-    'tog-bloom':'bloom','tog-dof':'dof','tog-mb':'motionBlur',
-    'tog-ca':'chromaticAberration','tog-grain':'filmGrain','tog-vignette':'vignette',
-    'tog-lut':'colorGrading','tog-ssr':'ssr','tog-fog':'volumetricFog',
-    'tog-flare':'lensFlare','tog-sss':'subsurfaceScattering',
-    'tog-af':'anisotropicFiltering','tog-normals':'normalMaps','tog-displace':'displacementMaps',
-    'tog-lod':'meshDecimation',
-    'tog-no-shaders':'disableShaders','tog-no-particles':'disableParticles','tog-no-postfx':'disablePostFX',
-    'tog-no-cull':'skipCulling','tog-no-light':'disableLighting','tog-static-batch':'staticBatchingOnly',
-    'tog-frustum':'frustumCullingOnly','tog-draw-calls':'reduceDrawCalls','tog-no-reflect':'disableReflections',
-  };
-  for(const [id,key] of Object.entries(togs)){
-    const el=document.getElementById(id); if(!el)continue;
-    el.checked=key===null?CFG.powerPreference==='high-performance':!!CFG[key];
-  }
-  document.getElementById('info-cores').textContent=navigator.hardwareConcurrency||'?';
-  document.getElementById('info-ram').textContent=(navigator.deviceMemory||'?')+'GB';
-  document.getElementById('info-preset').textContent=CFG.preset||'custom';
+// ─── TURBO GC ─────────────────────────────────────────
+function turboGC(){
+  window.__gc?.();
+  _blobUrls.forEach(u=>URL.revokeObjectURL(u));
+  _blobUrls.clear();
+  mlog('GC triggered + blobs freed','ok');
 }
-function slv(id,val,labels){
+const _blobUrls=new Set();
+
+// ─── SYNC UI ──────────────────────────────────────────
+function syncUI(){
+  // preset buttons
+  document.querySelectorAll('.qb').forEach(b=>b.classList.toggle('on',b.dataset.q===C.preset));
+  // lock
+  document.getElementById('def-lbl').textContent=C.locked?'Unlock (Using Unity Defaults)':'Lock to Unity Defaults';
+  document.getElementById('lock-banner').classList.toggle('visible',C.locked);
+  // disable all controls if locked
+  const disable=C.locked;
+  ['res-sl','dpi-sl','mem-sl','fps-cap','shad-q','bloom-i','tex-q','particle-b'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.disabled=disable;
+  });
+  document.querySelectorAll('.tog input').forEach(el=>el.disabled=disable);
+  document.querySelectorAll('.qb').forEach(b=>b.disabled=disable);
+  // sliders
+  sv('res-sl',C.resolution,i=>RES[i].l,'res-v');
+  sv('dpi-sl',Math.round(C.dpiScale*10),i=>(i/10).toFixed(1)+'×','dpi-v');
+  sv('mem-sl',C.memory,i=>i,'mem-v');
+  sv('fps-cap',FPS_V.indexOf(C.fpsCap)<0?0:FPS_V.indexOf(C.fpsCap),i=>FPS_L[i],'fps-cap-v');
+  sv('shad-q',C.shadowQuality,i=>SHAD[i],'shad-q-v');
+  sv('bloom-i',Math.round(C.bloomIntensity*10),i=>(i/10).toFixed(1),'bloom-i-v');
+  sv('tex-q',C.textureQuality,i=>TEX[i],'tex-q-v');
+  const pbi=PB.indexOf(C.particleBudget);
+  sv('particle-b',pbi<0?2:pbi,i=>PBL[i],'particle-b-v');
+  // toggles
+  const TM={
+    'tog-pace':'framePacing','tog-simd':'simd','tog-kbd':'captureAllKeyboardInput','tog-sticky':'stickyCursorLock',
+    'tog-nopart':'disableParticles','tog-depth':'depth','tog-stencil':'stencil',
+    'tog-pdb':'preserveDrawingBuffer','tog-desync':'desynchronized','tog-mempres':'memPressure',
+    'tog-hpgpu':null,'tog-aa':'antialias','tog-shad':'shadows','tog-soft':'softShadows',
+    'tog-bloom':'bloom','tog-vig':'vignette','tog-lut':'colorGrading','tog-mb':'motionBlur',
+    'tog-nopost':'disablePostFX','tog-af':'anisotropicFiltering','tog-norm':'normalMaps',
+  };
+  for(const[id,k]of Object.entries(TM)){
+    const el=document.getElementById(id);if(!el)continue;
+    el.checked=k===null?C.powerPreference==='high-performance':!!C[k];
+  }
+  // device info
+  document.getElementById('inf-cores').textContent=navigator.hardwareConcurrency||'?';
+  document.getElementById('inf-ram').textContent=(navigator.deviceMemory||'?')+'GB';
+  document.getElementById('inf-pre').textContent=C.preset||'custom';
+}
+function sv(id,val,fmt,vid){
   const el=document.getElementById(id);if(!el)return;
   el.value=val;
-  const lbl=document.getElementById(id+'-val');if(lbl)lbl.textContent=labels[val]||val;
+  const vEl=document.getElementById(vid);if(vEl)vEl.textContent=fmt(+val);
 }
 
-// ═══════════════════════════════════════════════════════
-//  TABS / PANEL
-// ═══════════════════════════════════════════════════════
-function switchTab(name){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
-  document.querySelectorAll('.tab-page').forEach(p=>p.classList.toggle('active',p.id==='page-'+name));
+// ─── TABS ─────────────────────────────────────────────
+const cv=document.getElementById('unity-canvas');
+const hkv=document.getElementById('hkv');
+let unityInstance=null;
+
+function tab(n){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.t===n));
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='page-'+n));
 }
-
-const cv  = document.getElementById('unity-canvas');
-// Update your video listener
-const hkv = document.getElementById('hkv');
-hkv.onended = () => {
-    hkv.style.display = 'none';
-    _cl("[HACK] Video ended. Triggering game resume...");
-    
-    // This tells Unity to move from the black screen to the next state
-    skipSendMsg(); 
-    
-    // Failsafe for Final Endings: If it's a "Final" clip, force a credit roll
-    if (hkv.src.toLowerCase().includes('final')) {
-        unityInstance.SendMessage('_GameManager', 'SendEvent', 'SHOW_CREDITS');
-    }
-    
-    csReset();
-};
-
-const fg  = document.getElementById('fps-graph');
-let unityInstance = null;
-
 function togglePanel(){
   const open=document.getElementById('panel').classList.toggle('open');
-  document.getElementById('panel-tab').classList.toggle('open',open);
-  fg.style.display=open?'block':'none';
+  document.getElementById('handle').classList.toggle('open',open);
+  document.getElementById('fps').style.display=open?'block':'none';
 }
 
-// ═══════════════════════════════════════════════════════
-//  LOG
-// ═══════════════════════════════════════════════════════
-function mlog(msg,cls=''){
+// ─── LOG ──────────────────────────────────────────────
+const mlog=(msg,cls='')=>{
   const el=document.getElementById('mlog');
-  const d=document.createElement('div'); d.className='ll '+cls;
+  const d=document.createElement('div');d.className='ll '+cls;
   const t=new Date();
   d.textContent=`${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')} ${msg}`;
-  el.appendChild(d); el.scrollTop=el.scrollHeight;
-  if(el.childNodes.length>140) el.removeChild(el.firstChild);
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+  if(el.childNodes.length>120)el.removeChild(el.firstChild);
+};
+const clearLog=()=>document.getElementById('mlog').innerHTML='';
+
+// ─── RENDER RESOLUTION ────────────────────────────────
+function applyRes(){
+  const idx=Math.min(+document.getElementById('res-sl').value,RES.length-1);
+  const s=RES[idx].v;
+  cv.width=Math.round(window.innerWidth*s*(C.dpiScale||1));
+  cv.height=Math.round(window.innerHeight*s*(C.dpiScale||1));
+  cv.style.cssText='width:100vw;height:100vh;image-rendering:'+(s<.6?'pixelated':'auto');
 }
-function clearLog(){document.getElementById('mlog').innerHTML='';}
+window.addEventListener('resize',applyRes);
 
-// ═══════════════════════════════════════════════════════
-//  RENDER RESOLUTION
-// ═══════════════════════════════════════════════════════
-function applyRenderRes(){
-  const idx=Math.min(+document.getElementById('res-slider').value,RES_STEPS.length-1);
-  const scale=RES_STEPS[idx].v;
-  document.getElementById('res-val').textContent=RES_STEPS[idx].l;
-  cv.width=Math.round(window.innerWidth*scale*CFG.dpiScale);
-  cv.height=Math.round(window.innerHeight*scale*CFG.dpiScale);
-  cv.style.width='100vw'; cv.style.height='100vh';
-  cv.style.imageRendering=scale<1?'pixelated':'auto';
+// ─── WIRE SLIDERS ─────────────────────────────────────
+const wire=(id,fn)=>{const e=document.getElementById(id);if(e)e.oninput=function(){if(!C.locked)fn(this);};};
+wire('res-sl',e=>{C.resolution=+e.value;C.preset='custom';save();document.getElementById('res-v').textContent=RES[+e.value].l;applyRes();});
+wire('dpi-sl',e=>{C.dpiScale=+e.value/10;save();document.getElementById('dpi-v').textContent=C.dpiScale.toFixed(1)+'×';applyRes();});
+wire('mem-sl',e=>{C.memory=+e.value;save();document.getElementById('mem-v').textContent=e.value;});
+wire('fps-cap',e=>{C.fpsCap=FPS_V[+e.value]||0;save();document.getElementById('fps-cap-v').textContent=FPS_L[+e.value];applyFpsCap();});
+wire('shad-q',e=>{C.shadowQuality=+e.value;save();document.getElementById('shad-q-v').textContent=SHAD[+e.value];});
+wire('bloom-i',e=>{C.bloomIntensity=+e.value/10;save();document.getElementById('bloom-i-v').textContent=C.bloomIntensity.toFixed(1);});
+wire('tex-q',e=>{C.textureQuality=+e.value;save();document.getElementById('tex-q-v').textContent=TEX[+e.value];});
+wire('particle-b',e=>{C.particleBudget=PB[+e.value]||512;save();document.getElementById('particle-b-v').textContent=PBL[+e.value];});
+
+function applyFpsCap(){
+  if(!C.framePacing)return;
+  // rAF-based throttle — works without SendMessage
+  const target=C.fpsCap||999;
+  const ms=1000/target;
+  let last=0;
+  const loop=ts=>{if(ts-last>=ms){last=ts;/* Unity drives its own rAF loop */}requestAnimationFrame(loop);};
+  requestAnimationFrame(loop);
 }
-window.addEventListener('resize',applyRenderRes);
 
-function wireSlider(id,onInput){
-  const el=document.getElementById(id);
-  if(el) el.oninput=function(){onInput(this);};
-}
-wireSlider('res-slider',el=>{CFG.resolution=+el.value;CFG.preset='';saveCFG();document.querySelectorAll('.qb').forEach(b=>b.classList.remove('active'));document.getElementById('res-val').textContent=RES_STEPS[+el.value].l;applyRenderRes();});
-wireSlider('dpi-slider',el=>{CFG.dpiScale=+el.value/10;saveCFG();document.getElementById('dpi-val').textContent=CFG.dpiScale.toFixed(1)+'×';applyRenderRes();});
-wireSlider('mem-slider',el=>{CFG.memory=+el.value;saveCFG();document.getElementById('mem-val').textContent=CFG.memory;});
-wireSlider('shadow-q',el=>{CFG.shadowQuality=+el.value;saveCFG();document.getElementById('shadow-q-val').textContent=SHADOW_Q_LBL[+el.value];sendUnityQuality();});
-wireSlider('shadow-dist',el=>{CFG.shadowDistance=+el.value;saveCFG();document.getElementById('shadow-dist-val').textContent=DIST_LBL[+el.value];});
-wireSlider('rend-dist',el=>{CFG.renderDistance=+el.value;saveCFG();document.getElementById('rend-dist-val').textContent=DIST_LBL[+el.value];});
-wireSlider('rt-bounces',el=>{CFG.rtBounces=RT_SAMPLES_V[+el.value]||2;saveCFG();document.getElementById('rt-bounces-val').textContent=CFG.rtBounces;});
-wireSlider('rt-samples',el=>{CFG.rtSamples=RT_SAMPLES_V[+el.value]||4;saveCFG();document.getElementById('rt-samples-val').textContent=CFG.rtSamples;});
-wireSlider('bloom-int',el=>{CFG.bloomIntensity=+el.value/10;saveCFG();document.getElementById('bloom-int-val').textContent=CFG.bloomIntensity.toFixed(1);});
-wireSlider('mb-samples',el=>{CFG.motionBlurSamples=MB_SAMPLES_V[+el.value]||4;saveCFG();document.getElementById('mb-samples-val').textContent=CFG.motionBlurSamples;});
-wireSlider('fog-steps',el=>{CFG.volumetricSteps=+el.value;saveCFG();document.getElementById('fog-steps-val').textContent=el.value;});
-wireSlider('tex-q',el=>{CFG.textureQuality=+el.value;saveCFG();document.getElementById('tex-q-val').textContent=TEX_Q_LBL[+el.value];sendUnityQuality();});
-wireSlider('af-level',el=>{CFG.afLevel=+el.value;saveCFG();document.getElementById('af-level-val').textContent=el.value+'×';});
-wireSlider('lod-bias',el=>{CFG.lodBias=LOD_BIAS_V[+el.value];saveCFG();document.getElementById('lod-bias-val').textContent=CFG.lodBias.toFixed(2);});
-wireSlider('particle-b',el=>{CFG.particleBudget=PARTICLE_B[+el.value];saveCFG();document.getElementById('particle-b-val').textContent=PARTICLE_B_LBL[+el.value];});
-wireSlider('fps-cap',el=>{CFG.fpsCap=FPS_CAP_V[+el.value];saveCFG();document.getElementById('fps-cap-val').textContent=FPS_CAP_LBL[+el.value];applyFpsCap();});
-
-function applyFpsCap(){if(!unityInstance)return;try{unityInstance.SendMessage('GameManager','SetTargetFrameRate',CFG.fpsCap||(-1));}catch(e){}}
-function sendUnityQuality(){if(!unityInstance)return;try{unityInstance.SendMessage('QualitySettings','SetQualityLevel',CFG.shadowQuality);unityInstance.SendMessage('GameManager','SetTextureQuality',CFG.textureQuality);}catch(e){}}
-
-// ═══════════════════════════════════════════════════════
-//  FPS GRAPH
-// ═══════════════════════════════════════════════════════
-const fc=document.getElementById('fps-canvas');
-fc.width=172; fc.height=48;
-const fctx=fc.getContext('2d');
-const fh=[]; let lft=performance.now(),fr=0;
-function uf(){
-  const now=performance.now(),dt=(now-lft)/1000; lft=now;
-  const fps=dt>0?1/dt:60; fr++;
+// ─── FPS GRAPH ────────────────────────────────────────
+const fpc=document.getElementById('fpc');
+fpc.width=168;fpc.height=44;
+const fctx=fpc.getContext('2d');
+const fhist=[];let lft=performance.now(),fr=0;
+(function uf(){
+  const now=performance.now(),fps=1000/(now-lft);lft=now;fr++;
   if(fr%3===0){
-    fh.push(fps); if(fh.length>86)fh.shift();
-    fctx.clearRect(0,0,172,48);
-    fh.forEach((f,i)=>{
+    fhist.push(fps);if(fhist.length>84)fhist.shift();
+    fctx.clearRect(0,0,168,44);
+    fhist.forEach((f,i)=>{
       fctx.fillStyle=f>50?'#4caf50':f>30?'#ffa726':'#ef5350';
-      fctx.fillRect(i*2,48-Math.min(f/60,1)*34,1.8,Math.min(f/60,1)*34);
+      fctx.fillRect(i*2,44-Math.min(f/60,1)*30,1.8,Math.min(f/60,1)*30);
     });
-    fctx.fillStyle='#c8a96e'; fctx.font='bold 11px monospace';
-    fctx.shadowColor='#000'; fctx.shadowBlur=3;
-    fctx.fillText(Math.round(fps)+' FPS',4,15);
-    fctx.shadowBlur=0;
-    fctx.fillStyle='#333'; fctx.font='8px monospace';
-    fctx.fillText(RES_STEPS[Math.min(CFG.resolution,RES_STEPS.length-1)].l+' | '+(CFG.preset||'custom'),4,30);
+    fctx.fillStyle='#c8a96e';fctx.font='bold 10px monospace';
+    fctx.shadowColor='#000';fctx.shadowBlur=3;
+    fctx.fillText(Math.round(fps)+' FPS',3,13);
+    fctx.shadowBlur=0;fctx.fillStyle='#333';fctx.font='7px monospace';
+    fctx.fillText(RES[Math.min(C.resolution,RES.length-1)].l+' | '+(C.preset||'custom'),3,26);
   }
   requestAnimationFrame(uf);
-}
+})();
 
-// ═══════════════════════════════════════════════════════
-//  GAMEPAD SPOOF
-// ═══════════════════════════════════════════════════════
+// ─── MEMORY PRESSURE MONITOR ──────────────────────────
+let _mpdropped=false;
+setInterval(()=>{
+  const m=performance.memory;if(!m)return;
+  const used=m.usedJSHeapSize,limit=m.jsHeapSizeLimit;
+  document.getElementById('heap-live').textContent=Math.round(used/1048576)+'MB';
+  document.getElementById('heap-limit').textContent=Math.round(limit/1048576)+'MB';
+  document.getElementById('inf-heap').textContent=Math.round(used/1048576)+'MB';
+  if(C.memPressure&&!_mpdropped&&used/limit>.85){
+    _mpdropped=true;
+    const idx=Math.max(0,+document.getElementById('res-sl').value-1);
+    document.getElementById('res-sl').value=idx;
+    C.resolution=idx;save();applyRes();
+    mlog('⚠ Heap >85% — render scale dropped','warn');
+  }
+  if(used/limit<.7)_mpdropped=false;
+},3000);
+
+// ─── GAMEPAD SPOOF ────────────────────────────────────
 const _rGP=navigator.getGamepads?navigator.getGamepads.bind(navigator):()=>[];
-let _gps={axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,touched:false,value:0}))};
+const _gps={axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,touched:false,value:0}))};
 (function syncGP(){
   for(const p of _rGP()){if(!p)continue;
     _gps.axes=[...(p.axes||[0,0,0,0])].slice(0,4);
@@ -902,60 +696,86 @@ let _gps={axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,touc
   requestAnimationFrame(syncGP);
 })();
 const fGP={id:'Xbox 360 Controller (XInput STANDARD GAMEPAD)',index:0,connected:true,mapping:'standard',
-  timestamp:performance.now(),get axes(){return[..._gps.axes];},get buttons(){return _gps.buttons.map(b=>({pressed:b.pressed,touched:b.touched,value:b.value}));}};
-navigator.getGamepads=function(){fGP.timestamp=performance.now();const r=_rGP();return r.length&&r[0]?r:[fGP,null,null,null];};
-function fireGP(){try{window.dispatchEvent(new GamepadEvent('gamepadconnected',{gamepad:fGP}));}catch(e){}}
+  get timestamp(){return performance.now();},get axes(){return[..._gps.axes];},
+  get buttons(){return _gps.buttons.map(b=>({pressed:b.pressed,touched:b.touched,value:b.value}));}
+};
+navigator.getGamepads=()=>{const r=_rGP();return r.length&&r[0]?r:[fGP,null,null,null];};
+const fireGP=()=>{try{window.dispatchEvent(new GamepadEvent('gamepadconnected',{gamepad:fGP}));}catch(e){}};
 setTimeout(fireGP,2000);
 
-// ═══════════════════════════════════════════════════════
-//  CUTSCENE
-// ═══════════════════════════════════════════════════════
-const CMAP={Prologue:'StreamingAssets/Prologue.mp4',Intro:'StreamingAssets/Intro.mp4',FinalA:'StreamingAssets/FinalA.mp4',FinalB:'StreamingAssets/FinalB.mp4',FinalC:'StreamingAssets/FinalC.mp4',FinalD:'StreamingAssets/FinalD.mp4',FinalE:'StreamingAssets/FinalE.mp4',Blacksmith:'StreamingAssets/Blacksmith.mp4',CharmSlugKiss:'StreamingAssets/CharmSlugKiss.mp4',Fountain:'StreamingAssets/Fountain.mp4',MaskShatter:'StreamingAssets/MaskShatter.mp4',MrMushroom:'StreamingAssets/MrMushroom.mp4',Nailsmith:'StreamingAssets/Nailsmith.mp4',NailsmithPaint:'StreamingAssets/NailsmithPaint.mp4',StagTunnelRun:'StreamingAssets/StagTunnelRun.mp4',Telescope:'StreamingAssets/Telescope.mp4'};
+// ─── CUTSCENE ─────────────────────────────────────────
+const CMAP={
+  Prologue:'StreamingAssets/Prologue.mp4',Intro:'StreamingAssets/Intro.mp4',
+  FinalA:'StreamingAssets/FinalA.mp4',FinalB:'StreamingAssets/FinalB.mp4',
+  FinalC:'StreamingAssets/FinalC.mp4',FinalD:'StreamingAssets/FinalD.mp4',
+  FinalE:'StreamingAssets/FinalE.mp4',Blacksmith:'StreamingAssets/Blacksmith.mp4',
+  CharmSlugKiss:'StreamingAssets/CharmSlugKiss.mp4',Fountain:'StreamingAssets/Fountain.mp4',
+  MaskShatter:'StreamingAssets/MaskShatter.mp4',MrMushroom:'StreamingAssets/MrMushroom.mp4',
+  Nailsmith:'StreamingAssets/Nailsmith.mp4',NailsmithPaint:'StreamingAssets/NailsmithPaint.mp4',
+  StagTunnelRun:'StreamingAssets/StagTunnelRun.mp4',Telescope:'StreamingAssets/Telescope.mp4',
+};
+
+// State machine: idle → playing → done
 let csState='idle';
-function csReset(){csState='idle';}
-function csQueue(name){if(!CMAP[name])return;csState='queued';hkv.src=CMAP[name];hkv.style.display='block';hkv.currentTime=0;hkv.play().catch(()=>{});}
-hkv.onended=()=>{hkv.style.display='none';if(csState==='playing'){skipAll();csReset();}else if(csState==='queued')csState='done';};
+let _csSkipQueued=false;
+
+hkv.addEventListener('ended',()=>{
+  hkv.style.display='none';
+  hkv.removeAttribute('src');
+  hkv.load();
+  csState='done';
+  // Delay skip slightly — Unity needs a frame to process the video end
+  setTimeout(doSkipAll,80);
+});
+
+hkv.addEventListener('error',()=>{
+  hkv.style.display='none';
+  csState='idle';
+  doSkipAll();
+});
+
+function csPlay(name){
+  if(!CMAP[name]||csState==='playing')return;
+  csState='playing';
+  _csSkipQueued=false;
+  hkv.src=CMAP[name];
+  hkv.style.display='block';
+  hkv.currentTime=0;
+  hkv.play().catch(()=>{csState='done';doSkipAll();});
+}
+
+function doSkipAll(){
+  // Keys
+  const keys=[{key:'Escape',code:'Escape',keyCode:27},{key:'Return',code:'Enter',keyCode:13},{key:' ',code:'Space',keyCode:32},{key:'z',code:'KeyZ',keyCode:90}];
+  keys.forEach(k=>{
+    const o={...k,which:k.keyCode,bubbles:true,cancelable:true};
+    cv.dispatchEvent(new KeyboardEvent('keydown',o));
+    cv.dispatchEvent(new KeyboardEvent('keyup',o));
+  });
+  // Pointer
+  const r=cv.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+  ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t=>cv.dispatchEvent(new MouseEvent(t,{clientX:cx,clientY:cy,bubbles:true,cancelable:true})));
+  // Gamepad
+  const saved=[..._gps.buttons];
+  _gps.buttons=Array.from({length:17},()=>({pressed:true,touched:true,value:1}));
+  setTimeout(()=>{_gps.buttons=saved;},250);fireGP();
+  // Reset state after giving skip time to register
+  setTimeout(()=>{csState='idle';},500);
+}
+
+// Console intercept — detect cutscene start
 const _cl=console.log.bind(console);
 console.log=(...a)=>{
   const m=a.join(' ');
-  if(m.includes("Started cinematic '")&&csState==='idle'){const n=m.split("Started cinematic '")[1]?.split("'")[0];if(n&&CMAP[n])csQueue(n);}
-  if(m.includes('SKIP_PROMPT')){if(csState==='queued')csState='playing';else if(csState==='done'){skipAll();csReset();}}
-  if(m.includes('Stopped cinematic')){hkv.style.display='none';hkv.pause();csReset();}
+  // Match: Started cinematic 'Name' OR "Playing cinematic Name"
+  const match=m.match(/(?:Started|Playing)\s+cinematic\s+'?(\w+)'?/i);
+  if(match&&csState==='idle'){csPlay(match[1]);}
+  if(/Stopped\s+cinematic/i.test(m)){hkv.style.display='none';hkv.pause();csState='idle';}
   _cl(...a);
 };
-function skipKeys(){[{key:'Escape',code:'Escape',keyCode:27},{key:'Return',code:'Enter',keyCode:13},{key:' ',code:'Space',keyCode:32},{key:'z',code:'KeyZ',keyCode:90}].forEach(k=>{const o={...k,which:k.keyCode,bubbles:true,cancelable:true};cv.dispatchEvent(new KeyboardEvent('keydown',o));cv.dispatchEvent(new KeyboardEvent('keyup',o));});}
-function skipPointer(){const r=cv.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t=>cv.dispatchEvent(new MouseEvent(t,{clientX:cx,clientY:cy,bubbles:true,cancelable:true})));}
-// Add this to your main script block
-function skipSendMsg() {
-  if (!unityInstance) return;
-  
-  // Hollow Knight specific event names
-  const events = ['FINISHED', 'SKIP', 'END', 'DONE', 'CANCEL'];
-  
-  events.forEach(ev => {
-    try {
-      // We know _GameManager is the right object from your previous logs
-      unityInstance.SendMessage('_GameManager', 'SendEvent', ev);
-    } catch(e) {}
-  });
 
-  // Specifically for the endings to trigger Credits
-  try {
-    unityInstance.SendMessage('_GameManager', 'OnCinematicFinished');
-    unityInstance.SendMessage('CinematicPlayer', 'Finish');
-  } catch(e) {}
-}
-
-function skipGamepad(){const p=_gps.buttons;_gps.buttons=Array.from({length:17},()=>({pressed:true,touched:true,value:1}));setTimeout(()=>{_gps.buttons=p;},300);fireGP();}
-function skipAll(){skipKeys();skipPointer();skipSendMsg();skipGamepad();}
-
-// ═══════════════════════════════════════════════════════
-//  CACHE — auto-runs on load, chunked parallel with progress
-// ═══════════════════════════════════════════════════════
-const CACHE_DB='hk_filecache_v3', CACHE_ST='files';
-
-// All cacheable files — build parts + cutscenes.
-// sharedassets are fetched by Unity via XHR and throttled separately.
+// ─── CACHE ────────────────────────────────────────────
+const CDB='hk_cache_v4',CST='files';
 const GAME_FILES=[
   ...Array.from({length:45},(_,i)=>`Build/hktruffled.data.part${i+1}`),
   'Build/hktruffled.wasm.part1','Build/hktruffled.wasm.part2',
@@ -964,314 +784,201 @@ const GAME_FILES=[
 ];
 
 let _cdb=null;
-function openCDB(){
-  if(_cdb) return Promise.resolve(_cdb);
+const openCDB=()=>{
+  if(_cdb)return Promise.resolve(_cdb);
   return new Promise((res,rej)=>{
-    const r=indexedDB.open(CACHE_DB,1);
+    const r=indexedDB.open(CDB,1);
     r.onerror=()=>rej(r.error);
     r.onsuccess=()=>{_cdb=r.result;res(_cdb);};
-    r.onupgradeneeded=e=>{
-      const db=e.target.result;
-      if(!db.objectStoreNames.contains(CACHE_ST))
-        db.createObjectStore(CACHE_ST,{keyPath:'path'});
-    };
+    r.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains(CST))db.createObjectStore(CST,{keyPath:'path'});};
   });
-}
-async function getCached(path){
-  const db=await openCDB();
-  return new Promise((res,rej)=>{
-    const r=db.transaction(CACHE_ST,'readonly').objectStore(CACHE_ST).get(path);
-    r.onsuccess=()=>res(r.result||null); r.onerror=()=>rej(r.error);
-  });
-}
-async function putCached(path,buf){
-  const db=await openCDB();
-  return new Promise((res,rej)=>{
-    const tx=db.transaction(CACHE_ST,'readwrite');
-    tx.objectStore(CACHE_ST).put({path,buf,ts:Date.now()});
-    tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
-  });
-}
+};
+const getCached=async p=>{const db=await openCDB();return new Promise((res,rej)=>{const r=db.transaction(CST,'readonly').objectStore(CST).get(p);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error);});};
+const putCached=async(p,buf)=>{const db=await openCDB();return new Promise((res,rej)=>{const tx=db.transaction(CST,'readwrite');tx.objectStore(CST).put({path:p,buf,ts:Date.now()});tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});};
 
-// Background auto-cache — starts silently after page load
 async function autoCacheFiles(){
-  const pill=document.getElementById('offline-pill');
-  const prog=document.getElementById('cache-progress');
-  const pct=document.getElementById('cache-status-pct');
-  const lbl=document.getElementById('cache-status-label');
-  const stateLbl=document.getElementById('cache-state-lbl');
-  const countEl=document.getElementById('cache-count');
-  const totalEl=document.getElementById('cache-total');
-
-  const total=GAME_FILES.length;
-  totalEl.textContent=total;
-
-  // Count what's already cached
+  const pill=document.getElementById('pill');
+  const prog=document.getElementById('cprog'),pct=document.getElementById('cbar-pct');
+  const lbl=document.getElementById('cbar-lbl'),st=document.getElementById('cc-state');
+  const cnt=document.getElementById('cc-count'),tot=document.getElementById('cc-total');
+  const total=GAME_FILES.length;tot.textContent=total;
   const db=await openCDB();
-  const existingCount=await new Promise(res=>{
-    const r=db.transaction(CACHE_ST,'readonly').objectStore(CACHE_ST).count();
-    r.onsuccess=()=>res(r.result);
-  });
-
-  if(existingCount>=total){
-    pill.textContent='● fully cached'; pill.className='cached';
-    lbl.textContent='All files cached'; pct.textContent='100%';
-    prog.style.width='100%'; countEl.textContent=existingCount;
-    stateLbl.textContent='Ready'; return;
-  }
-
-  pill.textContent='↓ caching…'; pill.className='caching';
-  lbl.textContent='Downloading in background…';
-  stateLbl.textContent='Caching';
-
-  let done=0, failed=0;
-  const queue=[...GAME_FILES];
-
-  // 8 parallel workers with chunked streaming
-  await Promise.all(Array.from({length:8},async()=>{
-    while(queue.length){
-      const path=queue.shift();
+  const ex=await new Promise(r=>{const q=db.transaction(CST,'readonly').objectStore(CST).count();q.onsuccess=()=>r(q.result);});
+  if(ex>=total){pill.textContent='● fully cached';pill.className='cached';lbl.textContent='All files cached';pct.textContent='100%';prog.style.width='100%';cnt.textContent=ex;st.textContent='Ready';return;}
+  pill.textContent='↓ caching…';pill.className='caching';lbl.textContent='Downloading in background…';st.textContent='Caching';
+  let done=0,failed=0;
+  const q=[...GAME_FILES];
+  // 4 workers — gentler on Chromebook bandwidth
+  await Promise.all(Array.from({length:4},async()=>{
+    while(q.length){
+      const path=q.shift();
       try{
         const ex=await getCached(path);
-        if(ex){ done++; }
-        else{
-          // Chunked fetch with streaming
+        if(ex){done++;}else{
           const resp=await fetch(path);
           if(resp.ok){
-            const reader=resp.body.getReader();
-            const chunks=[];
-            while(true){
-              const{done:d,value}=await reader.read();
-              if(d) break;
-              chunks.push(value);
-            }
-            const size=chunks.reduce((a,c)=>a+c.length,0);
-            const buf=new Uint8Array(size); let off=0;
-            for(const c of chunks){buf.set(c,off);off+=c.length;}
-            await putCached(path,buf.buffer);
-            done++;
-          } else { failed++; done++; }
+            const reader=resp.body.getReader();const chunks=[];
+            while(true){const{done:d,value}=await reader.read();if(d)break;chunks.push(value);}
+            const sz=chunks.reduce((a,c)=>a+c.length,0);
+            const buf=new Uint8Array(sz);let off=0;for(const c of chunks){buf.set(c,off);off+=c.length;}
+            await putCached(path,buf.buffer);done++;
+          }else{failed++;done++;}
         }
-      }catch(e){ failed++; done++; }
-
-      // Update UI
+      }catch(e){failed++;done++;}
       const p=Math.round(done/total*100);
-      prog.style.width=p+'%';
-      pct.textContent=p+'%';
-      countEl.textContent=done-failed;
-      lbl.textContent=failed
-        ? `${done-failed}/${total} cached (${failed} skipped)`
-        : `${done}/${total} files cached`;
+      prog.style.width=p+'%';pct.textContent=p+'%';cnt.textContent=done-failed;
+      lbl.textContent=`${done-failed}/${total} cached${failed?' ('+failed+' skipped)':''}`;
     }
   }));
-
   const cached=done-failed;
-  if(cached>=total){
-    pill.textContent='● fully cached'; pill.className='cached';
-    stateLbl.textContent='Ready';
-  } else if(cached>0){
-    pill.textContent=`◐ ${cached}/${total} cached`; pill.className='partial';
-    stateLbl.textContent='Partial';
-  } else {
-    pill.textContent='○ not cached'; pill.className='';
-    stateLbl.textContent='None';
-  }
-  lbl.textContent=`${cached}/${total} cached${failed?' ('+failed+' failed)':''}`;
-  mlog(`Cache complete: ${cached}/${total}`+(failed?` (${failed} failed)`:''), failed?'warn':'ok');
+  pill.textContent=cached>=total?'● fully cached':`◐ ${cached}/${total} cached`;
+  pill.className=cached>=total?'cached':'partial';
+  st.textContent=cached>=total?'Ready':cached>0?'Partial':'None';
+  mlog(`Cache: ${cached}/${total}${failed?' ('+failed+' failed)':''}`,failed?'warn':'ok');
 }
 
 async function clearCache(){
   try{
     const db=await openCDB();
-    const tx=db.transaction(CACHE_ST,'readwrite');
-    tx.objectStore(CACHE_ST).clear();
+    const tx=db.transaction(CST,'readwrite');tx.objectStore(CST).clear();
     await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
-    mlog('Cache cleared — will re-download on next load','ok');
-    document.getElementById('cache-status-label').textContent='Cache cleared';
-    document.getElementById('cache-status-pct').textContent='0%';
-    document.getElementById('cache-progress').style.width='0%';
-    document.getElementById('cache-count').textContent='0';
-    document.getElementById('cache-state-lbl').textContent='None';
-    document.getElementById('offline-pill').textContent='○ not cached';
-    document.getElementById('offline-pill').className='';
+    mlog('Cache cleared','ok');
+    ['cbar-lbl','cc-count','cc-state'].forEach(id=>{
+      const labels={'cbar-lbl':'Cache cleared','cc-count':'0','cc-state':'None'};
+      const el=document.getElementById(id);if(el)el.textContent=labels[id];
+    });
+    document.getElementById('cbar-pct').textContent='0%';
+    document.getElementById('cprog').style.width='0%';
+    document.getElementById('pill').textContent='○ not cached';
+    document.getElementById('pill').className='';
   }catch(e){mlog('clear failed: '+e.message,'err');}
 }
 
-// ═══════════════════════════════════════════════════════
-//  FETCH WITH CACHE (used by Unity loader pipeline)
-// ═══════════════════════════════════════════════════════
-const TOTAL_MB=912.81; let _lb=0,_te=0;
-function setLoadSub(m){document.getElementById('loading-sub').textContent=m;}
-function setLoadPct(p){const v=Math.min(100,Math.round(p));document.getElementById('loading-bar').style.width=v+'%';document.getElementById('loading-pct').textContent=v+'%';}
+// ─── FETCH PIPELINE ───────────────────────────────────
+const TOTAL_MB=912.81;let _lb=0,_te=0;
+const setP=(p)=>{const v=Math.min(100,Math.round(p));document.getElementById('ls-fill').style.width=v+'%';document.getElementById('ls-pct').textContent=v+'%';};
+const setSub=(m)=>document.getElementById('ls-sub').textContent=m;
 
 async function fetchWithCache(path){
-  // 1. Warm in-memory preload map
-  if(window.__hkPreload?.has(path)){
-    const buf=window.__hkPreload.get(path);
-    window.__hkPreload.delete(path);
-    _lb+=buf.byteLength; setLoadPct(_lb/(_te||1)*100);
-    return buf;
-  }
-  // 2. IndexedDB persistent cache
   const cached=await getCached(path);
-  if(cached?.buf){
-    _lb+=cached.buf.byteLength; setLoadPct(_lb/(_te||1)*100);
-    return cached.buf;
-  }
-  // 3. Chunked network fetch with progress
+  if(cached?.buf){_lb+=cached.buf.byteLength;setP(_lb/(_te||1)*100);return cached.buf;}
   const resp=await fetch(path);
-  if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${path}`);
-  const reader=resp.body.getReader();
-  const chunks=[];
-  while(true){
-    const{done,value}=await reader.read();
-    if(done) break;
-    _lb+=value.length; chunks.push(value);
-    setLoadPct(_lb/(_te||TOTAL_MB*1048576)*100);
-    setLoadSub(`${(_lb/1048576).toFixed(1)} / ${TOTAL_MB} MB`);
-  }
+  if(!resp.ok)throw new Error(`HTTP ${resp.status}: ${path}`);
+  const reader=resp.body.getReader();const chunks=[];
+  while(true){const{done,value}=await reader.read();if(done)break;_lb+=value.length;chunks.push(value);setP(_lb/(_te||TOTAL_MB*1048576)*100);setSub(`${(_lb/1048576).toFixed(1)} / ${TOTAL_MB} MB`);}
   const buf=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
-  let off=0; for(const c of chunks){buf.set(c,off);off+=c.length;}
-  // Store in IDB for next time (fire-and-forget)
+  let off=0;for(const c of chunks){buf.set(c,off);off+=c.length;}
   putCached(path,buf.buffer).catch(()=>{});
   return buf.buffer;
 }
 
+// Reduced to 4 concurrent — better for Chromebook
 async function fetchPartsParallel(base,from,to){
   const paths=Array.from({length:to-from+1},(_,i)=>`${base}.part${from+i}`);
-  const queue=[...paths.map((p,i)=>({p,i}))];
-  const bufs=new Array(paths.length);
-  await Promise.all(Array.from({length:6},async()=>{
-    while(queue.length){const{p,i}=queue.shift();bufs[i]=await fetchWithCache(p);}
-  }));
+  const q=[...paths.map((p,i)=>({p,i}))];const bufs=new Array(paths.length);
+  await Promise.all(Array.from({length:4},async()=>{while(q.length){const{p,i}=q.shift();bufs[i]=await fetchWithCache(p);}}));
   const total=bufs.reduce((a,b)=>a+b.byteLength,0);
-  const out=new Uint8Array(total); let off=0;
+  const out=new Uint8Array(total);let off=0;
   for(const b of bufs){out.set(new Uint8Array(b),off);off+=b.byteLength;}
-  return URL.createObjectURL(new Blob([out]));
+  const url=URL.createObjectURL(new Blob([out]));_blobUrls.add(url);return url;
 }
 
-// ═══════════════════════════════════════════════════════
-//  SAVE — DOWNLOAD
-// ═══════════════════════════════════════════════════════
+// ─── SAVE ─────────────────────────────────────────────
 async function doDownloadSave(){
-  mlog('Scanning save data…','hi');
+  mlog('Scanning save…','hi');
   try{
     const dbs=await indexedDB.databases();
-    if(!dbs.some(d=>d.name==='/idbfs')){mlog('No save found — play the game first','err');return;}
+    if(!dbs.some(d=>d.name==='/idbfs')){mlog('No save found — play first','err');return;}
     const req=indexedDB.open('/idbfs');
     req.onsuccess=e=>{
       const db=e.target.result;
       const tx=db.transaction('FILE_DATA','readonly'),st=tx.objectStore('FILE_DATA');
       const vr=st.getAll(),kr=st.getAllKeys();
-      vr.onsuccess=()=>{kr.onsuccess=()=>{
-        const vals=vr.result,keys=kr.result;
-        if(!keys.length){mlog('Save database is empty','err');return;}
-        const data=keys.map((key,i)=>{
-          const e=vals[i];let c=e.contents;
+      vr.onsuccess=()=>kr.onsuccess=()=>{
+        const data=kr.result.map((key,i)=>{
+          const v=vr.result[i];let c=v.contents;
           if(c instanceof Int8Array){const o={};for(let j=0;j<c.length;j++)o[j]=c[j];c=o;}
-          return{key,value:{timestamp:e.timestamp,mode:e.mode,contents:c}};
+          return{key,value:{timestamp:v.timestamp,mode:v.mode,contents:c}};
         });
         const a=document.createElement('a');
         a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
-        a.download='hk-save.json';document.body.appendChild(a);a.click();document.body.removeChild(a);
-        mlog('Save downloaded successfully','ok');
-      };};
+        a.download='hk-save.json';a.click();mlog('Save downloaded','ok');
+      };
     };
-    req.onerror=()=>mlog('Could not open save database','err');
+    req.onerror=()=>mlog('Could not open save DB','err');
   }catch(e){mlog('Error: '+e.message,'err');}
 }
 
-// ═══════════════════════════════════════════════════════
-//  SAVE — FETCH FROM URL
-// ═══════════════════════════════════════════════════════
 async function fetchAndSaveHK(){
   const url=document.getElementById('save-url').value.trim();
   if(!url){mlog('Paste a URL first','warn');return;}
   try{
-    mlog('Fetching save from URL…','hi');
-    const res=await fetch(url);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data=await res.text();
+    const res=await fetch(url);if(!res.ok)throw new Error('HTTP '+res.status);
     const a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
-    a.download='hk-save.json'; a.click();
-    mlog('Save fetched and downloaded','ok');
+    a.href=URL.createObjectURL(new Blob([await res.text()],{type:'application/json'}));
+    a.download='hk-save.json';a.click();mlog('Save fetched','ok');
   }catch(e){mlog('Fetch failed: '+e.message,'err');}
 }
 
-// ═══════════════════════════════════════════════════════
-//  SAVE — FILE DROP & INJECT
-// ═══════════════════════════════════════════════════════
 let _saveData=null;
 const dz=document.getElementById('dz'),fi=document.getElementById('fi');
-const dzLbl=document.getElementById('dz-lbl'),injBtn=document.getElementById('inj-btn');
 dz.onclick=()=>fi.click();
-fi.onchange=()=>{if(fi.files[0])loadSaveFile(fi.files[0]);};
+fi.onchange=()=>{if(fi.files[0])loadSF(fi.files[0]);};
 dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag');};
 dz.ondragleave=()=>dz.classList.remove('drag');
-dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');if(e.dataTransfer.files[0])loadSaveFile(e.dataTransfer.files[0]);};
-function loadSaveFile(file){
+dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');if(e.dataTransfer.files[0])loadSF(e.dataTransfer.files[0]);};
+function loadSF(file){
   const r=new FileReader();
-  r.onload=e=>{
-    try{receiveSaveData(JSON.parse(e.target.result),file.name);}
-    catch(err){mlog('Could not read file: '+err.message,'err');}
-  };
+  r.onload=e=>{try{rxSave(JSON.parse(e.target.result),file.name);}catch(err){mlog('Bad file: '+err.message,'err');}};
   r.readAsText(file);
 }
-function receiveSaveData(data,name){
+function rxSave(data,name){
   _saveData=data;
-  const isArr=Array.isArray(data);
-  dzLbl.textContent=`✓ ${name} (${isArr?data.length:Object.keys(data).length} ${isArr?'entries':'stores'})`;
-  dz.classList.add('has-file'); injBtn.disabled=false; injBtn.style.opacity='1';
-  mlog('Save file ready: '+name,'ok');
+  const n=Array.isArray(data)?data.length:Object.keys(data).length;
+  document.getElementById('dz-lbl').textContent=`✓ ${name} (${n} entries)`;
+  dz.classList.add('has-file');
+  const b=document.getElementById('inj-btn');b.disabled=false;b.style.opacity='1';
+  mlog('Save ready: '+name,'ok');
 }
 
 async function doInjectSave(){
-  if(!_saveData){mlog('No save file loaded','err');return;}
-  mlog('Injecting save…','hi');
+  if(!_saveData){mlog('No save loaded','err');return;}
+  mlog('Injecting…','hi');
   if(Array.isArray(_saveData)){
-    try{
-      const dbReq=indexedDB.open('/idbfs');
-      dbReq.onsuccess=e=>{
-        const db=e.target.result;
-        db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
-          let hash=null;
-          for(const k of ev.target.result){const p=k.split('/');if(p.length>=3){hash=p[2];break;}}
-          const tx=db.transaction('FILE_DATA','readwrite'),st=tx.objectStore('FILE_DATA');
-          st.clear(); let w=0;
-          _saveData.forEach(entry=>{
-            let key=entry.key;
-            if(hash){const p=key.split('/');if(p.length>=3){p[2]=hash;key=p.join('/');}}
-            let c=entry.value.contents;
-            if(c&&typeof c==='object'&&!(c instanceof Int8Array)){
-              const idx=Object.keys(c).map(Number).sort((a,b)=>a-b);
-              const arr=new Int8Array(idx.length);idx.forEach(i=>arr[i]=c[i]);c=arr;
-            }
-            st.put({timestamp:new Date(entry.value.timestamp),mode:entry.value.mode,contents:c},key);w++;
-          });
-          tx.oncomplete=()=>{mlog(`Injected ${w} entries — reloading…`,'ok');db.close();setTimeout(()=>location.reload(),2000);};
-          tx.onerror=err=>mlog('Write error: '+err,'err');
-        };
+    const req=indexedDB.open('/idbfs');
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
+        let hash=null;
+        for(const k of ev.target.result){const p=k.split('/');if(p.length>=3){hash=p[2];break;}}
+        const tx=db.transaction('FILE_DATA','readwrite'),st=tx.objectStore('FILE_DATA');
+        st.clear();let w=0;
+        _saveData.forEach(entry=>{
+          let key=entry.key;
+          if(hash){const p=key.split('/');if(p.length>=3){p[2]=hash;key=p.join('/');}}
+          let c=entry.value.contents;
+          if(c&&typeof c==='object'&&!(c instanceof Int8Array)){const idx=Object.keys(c).map(Number).sort((a,b)=>a-b);const arr=new Int8Array(idx.length);idx.forEach(i=>arr[i]=c[i]);c=arr;}
+          st.put({timestamp:new Date(entry.value.timestamp),mode:entry.value.mode,contents:c},key);w++;
+        });
+        tx.oncomplete=()=>{mlog(`Injected ${w} entries — reloading…`,'ok');db.close();setTimeout(()=>location.reload(),2000);};
+        tx.onerror=err=>mlog('Write error: '+err,'err');
       };
-      dbReq.onerror=()=>mlog('Could not open save database','err');
-    }catch(e){mlog('Error: '+e.message,'err');}
-    return;
+    };req.onerror=()=>mlog('Could not open save DB','err');return;
   }
-  let ok=0,tot=Object.keys(_saveData).length;
-  for(const [sk,records] of Object.entries(_saveData)){
+  let ok=0;const keys=Object.keys(_saveData);
+  for(const sk of keys){
     const sl=sk.indexOf('/'),dbN=sk.substring(0,sl),stN=sk.substring(sl+1);
     try{
       const db=await openOrCreate(dbN,stN);
       await new Promise((res,rej)=>{
         const tx=db.transaction([stN],'readwrite'),st=tx.objectStore(stN);st.clear();
-        records.forEach(rec=>{const r={...rec};if(Array.isArray(r.contents))r.contents=new Uint8Array(r.contents);st.put(r);});
+        _saveData[sk].forEach(rec=>{const r={...rec};if(Array.isArray(r.contents))r.contents=new Uint8Array(r.contents);st.put(r);});
         tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
-      });
-      db.close();ok++;
+      });db.close();ok++;
     }catch(e){mlog(`Failed: ${sk} — ${e.message}`,'err');}
   }
-  mlog(`${ok}/${tot} stores injected`,ok===tot?'ok':'warn');
-  if(ok>0){mlog('Reloading in 2s…','hi');setTimeout(()=>location.reload(),2000);}
+  mlog(`${ok}/${keys.length} stores injected`,ok===keys.length?'ok':'warn');
+  if(ok>0){mlog('Reloading…','hi');setTimeout(()=>location.reload(),2000);}
 }
 
 function openOrCreate(dbName,storeName){
@@ -1291,34 +998,37 @@ function openOrCreate(dbName,storeName){
   });
 }
 
-// ═══════════════════════════════════════════════════════
-//  MOBILE
-// ═══════════════════════════════════════════════════════
+function reloadWithMem(){mlog('Reloading with new memory setting…','hi');setTimeout(()=>location.reload(),500);}
+
+// ─── MOBILE ───────────────────────────────────────────
 if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){
-  const m=document.createElement('meta');m.name='viewport';m.content='width=device-width,height=device-height,initial-scale=1,user-scalable=no,shrink-to-fit=yes';
-  document.head.appendChild(m);
-  document.getElementById('unity-mobile-warning').style.display='block';
-  setTimeout(()=>document.getElementById('unity-mobile-warning').style.display='none',5000);
+  const m=document.createElement('meta');m.name='viewport';m.content='width=device-width,height=device-height,initial-scale=1,user-scalable=no';document.head.appendChild(m);
 }
 
-// ═══════════════════════════════════════════════════════
-//  BOOT
-// ═══════════════════════════════════════════════════════
-(async()=>{
-  loadCFG(); syncUIFromCFG();
+// ─── SESSION TIMER ────────────────────────────────────
+setTimeout(()=>{
+  const t=document.getElementById('session-toast');
+  t.style.display='block';requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.style.display='none',400);},8000);
+},45*60*1000);
 
-  cv.style.width='100vw'; cv.style.height='100vh'; cv.style.imageRendering='pixelated';
-  cv.width=Math.round(window.innerWidth*RES_STEPS[Math.min(CFG.resolution,RES_STEPS.length-1)].v*CFG.dpiScale);
-  cv.height=Math.round(window.innerHeight*RES_STEPS[Math.min(CFG.resolution,RES_STEPS.length-1)].v*CFG.dpiScale);
+// ─── CHROMEBOOK DETECT ────────────────────────────────
+if(!/CrOS/i.test(navigator.userAgent))document.getElementById('cb-note').style.display='none';
+
+// ─── BOOT ─────────────────────────────────────────────
+(async()=>{
+  load();syncUI();
+  cv.style.cssText='width:100vw;height:100vh;image-rendering:pixelated';
+  const idx=Math.min(C.resolution,RES.length-1);
+  cv.width=Math.round(window.innerWidth*RES[idx].v*(C.dpiScale||1));
+  cv.height=Math.round(window.innerHeight*RES[idx].v*(C.dpiScale||1));
 
   await openCDB();
   _te=TOTAL_MB*1048576;
 
-  // Start background cache immediately (non-blocking)
-  autoCacheFiles().catch(e=>mlog('Cache error: '+e.message,'warn'));
-
-  setLoadSub('Loading files…');
-  const [du,wu,fwBuf,ldrBuf]=await Promise.all([
+  // Cache starts AFTER Unity is running to avoid starving the loader
+  setSub('Loading files…');
+  const[du,wu,fwBuf,ldrBuf]=await Promise.all([
     fetchPartsParallel('Build/hktruffled.data',1,45),
     fetchPartsParallel('Build/hktruffled.wasm',1,2),
     fetchWithCache('Build/hktruffled.framework.js'),
@@ -1327,40 +1037,40 @@ if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){
 
   const fwUrl=URL.createObjectURL(new Blob([fwBuf],{type:'application/javascript'}));
   const ldrUrl=URL.createObjectURL(new Blob([ldrBuf],{type:'application/javascript'}));
+  _blobUrls.add(fwUrl);_blobUrls.add(ldrUrl);
 
-  setLoadSub('Starting engine…'); setLoadPct(99);
-  const sc=document.createElement('script'); sc.src=ldrUrl;
-  sc.onerror=()=>{mlog('Loader script failed','err');setLoadSub('Loader error');};
+  setSub('Starting engine…');setP(99);
+  const sc=document.createElement('script');sc.src=ldrUrl;
+  sc.onerror=()=>{mlog('Loader failed','err');setSub('Loader error');};
   sc.onload=()=>{
-    setLoadPct(100);
+    setP(100);
     createUnityInstance(cv,{
-      dataUrl:du, frameworkUrl:fwUrl, codeUrl:wu,
+      dataUrl:du,frameworkUrl:fwUrl,codeUrl:wu,
       streamingAssetsUrl:'StreamingAssets',
-      companyName:'Team Cherry', productName:'Hollow Knight', productVersion:'1.0',
-      devicePixelRatio:CFG.dpiScale,
+      companyName:'Team Cherry',productName:'Hollow Knight',productVersion:'1.0',
+      devicePixelRatio:C.dpiScale,
       matchWebGLToCanvasSize:false,
-      memory:CFG.memory*1024*1024,
+      memory:C.memory*1024*1024,
       webglContextAttributes:{
-        antialias:CFG.antialias, alpha:false,
-        depth:CFG.depth, stencil:CFG.stencil,
-        premultipliedAlpha:CFG.premultipliedAlpha,
-        preserveDrawingBuffer:CFG.preserveDrawingBuffer,
-        desynchronized:CFG.desynchronized,
-        powerPreference:CFG.powerPreference,
+        antialias:C.antialias,alpha:false,depth:C.depth,stencil:C.stencil,
+        premultipliedAlpha:false,preserveDrawingBuffer:C.preserveDrawingBuffer,
+        desynchronized:C.desynchronized,powerPreference:C.powerPreference,
         failIfMajorPerformanceCaveat:false,
       }
     }).then(inst=>{
       unityInstance=inst;
-      // Extended revoke timeout — blobs must outlive Unity's async shader compilation
-      setTimeout(()=>[du,wu,fwUrl,ldrUrl].forEach(u=>URL.revokeObjectURL(u)),60000);
-      const ls=document.getElementById('loading-screen');
-      ls.style.transition='opacity .6s'; ls.style.opacity='0';
-      setTimeout(()=>ls.remove(),700);
-      applyRenderRes(); uf();
+      // Revoke only after extended delay — shader compilation on Chromebook can be slow
+      setTimeout(()=>{_blobUrls.forEach(u=>URL.revokeObjectURL(u));_blobUrls.clear();},5*60*1000);
+      const ls=document.getElementById('ls');
+      ls.style.transition='opacity .5s';ls.style.opacity='0';
+      setTimeout(()=>ls.remove(),600);
+      applyRes();
       mlog('Unity ready','ok');
-      mlog(`${CFG.preset||'custom'} | ${RES_STEPS[Math.min(CFG.resolution,RES_STEPS.length-1)].l} | ${CFG.memory}MB`,'hi');
-      fireGP(); applyFpsCap();
-    }).catch(e=>{mlog('Unity error: '+e,'err');setLoadSub('Error — check log');});
+      mlog(`${C.preset||'custom'} | ${RES[idx].l} | ${C.memory}MB`,'hi');
+      fireGP();
+      // Start background cache now that Unity is running
+      autoCacheFiles().catch(e=>mlog('Cache: '+e.message,'warn'));
+    }).catch(e=>{mlog('Unity error: '+e,'err');setSub('Error — see log');});
   };
   document.body.appendChild(sc);
 })();
