@@ -1,0 +1,1755 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<base href="https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/">
+<meta charset="utf-8">
+<title>My Drive - Google Drive</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<script>
+async function startWithCompressedAssets() {
+  // NOTE: These MUST be .zip files. The browser cannot handle .7z extraction.
+  const archiveUrls = [
+    "https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/HK_Assets.zip",
+    "https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/HK_Resources.zip"
+  ];
+  
+  const assetMap = {};
+
+  try {
+    // Loop through each archive and process them one by one
+    for (let i = 0; i < archiveUrls.length; i++) {
+      const url = archiveUrls[i];
+      const fileName = url.split('/').pop();
+      
+      uiLog(`Downloading ${fileName}... (${i + 1}/${archiveUrls.length})`, "warn");
+      
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch ${fileName}`);
+      
+      const arrayBuffer = await response.arrayBuffer();
+      
+      uiLog(`Decompressing ${fileName}...`, "warn");
+      const zip = await JSZip.loadAsync(arrayBuffer);
+      
+      // Extract files and add them to our master map
+      for (const [name, file] of Object.entries(zip.files)) {
+        if (!file.dir) {
+          const content = await file.async("blob");
+          assetMap[name] = URL.createObjectURL(content);
+        }
+      }
+    }
+
+    uiLog("All archives decompressed. Intercepting Unity requests...", "ok");
+
+    // The Traffic Cop: Intercept Unity's requests and serve the local memory versions
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options) {
+      const fileName = url.toString().split('/').pop();
+      
+      if (assetMap[fileName]) {
+        // Serve from RAM
+        return originalFetch(assetMap[fileName], options);
+      }
+      // Serve from Web (for core engine files)
+      return originalFetch(url, options);
+    };
+
+    // Everything is loaded in RAM, safe to launch
+    launchUnity(); 
+
+  } catch (err) {
+    uiLog("Archive Load Error: " + err.message, "err");
+    // Fallback: try to launch anyway in case the game can survive without it
+    launchUnity(); 
+  }
+}
+
+// Start the sequence
+startWithCompressedAssets();
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Fira+Code:wght@300;400&display=swap');
+:root{
+  --gold:#c8a96e;--gold2:#e8c98e;--ink:#080808;--panel:#0b0b0b;
+  --rim:#1e1e1e;--rim2:#282828;--muted:#3a3a3a;--dim:#222;
+  --ok:#4caf50;--bad:#ef5350;--warn:#ffa726;--info:#5c9cf5;--r:2px
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Fira Code',monospace;font-size:11px}
+
+/* ── LOADING ── */
+#ls{position:fixed;inset:0;background:#000;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+#ls-icon{font-size:32px;color:var(--gold);animation:breathe 2.4s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.3;transform:scale(.94)}50%{opacity:1;transform:scale(1)}}
+#ls h1{color:var(--gold);font:600 20px 'Cinzel',serif;letter-spacing:6px}
+#ls-bar{width:260px;height:1px;background:#181818}
+#ls-fill{height:100%;background:var(--gold);width:0%;transition:width .12s;position:relative}
+#ls-fill::after{content:'';position:absolute;right:-1px;top:-2px;width:2px;height:5px;background:var(--gold2);box-shadow:0 0 6px var(--gold)}
+#ls-pct{color:var(--muted);font-size:9px;letter-spacing:2px}
+#ls-sub{color:var(--dim);font-size:9px;letter-spacing:1.5px;min-height:12px}
+
+/* ── CANVAS / VIDEO ── */
+#unity-canvas{display:block;position:absolute;top:0;left:0;image-rendering:pixelated}
+#hkv{position:fixed;inset:0;width:100vw;height:100vh;object-fit:cover;z-index:99998;display:none}
+
+/* ── FPS ── */
+#fps{position:fixed;top:10px;left:10px;width:180px;height:56px;background:rgba(6,6,6,.95);border:1px solid var(--rim);border-radius:var(--r);padding:6px;z-index:9999;display:none}
+#fps canvas{width:100%;height:100%;display:block}
+
+/* ── PILL ── */
+#pill{position:fixed;bottom:10px;left:10px;padding:2px 8px;background:rgba(0,0,0,.85);border:1px solid var(--rim);border-radius:var(--r);font-size:9px;color:var(--muted);z-index:9999;pointer-events:none;letter-spacing:.5px;transition:.3s}
+#pill.cached{color:var(--ok);border-color:#4caf5033}
+#pill.partial{color:var(--warn);border-color:#ffa72633}
+#pill.caching{color:var(--info);border-color:#5c9cf533}
+
+/* ── HANDLE ── */
+#handle{position:fixed;right:0;top:50%;transform:translateY(-50%);width:7px;height:28px;background:var(--panel);border:1px solid var(--rim2);border-right:none;border-radius:3px 0 0 3px;cursor:pointer;z-index:100001;display:flex;align-items:center;justify-content:center;transition:.15s}
+#handle:hover{border-color:#c8a96e44}
+#handle svg{transition:transform .3s}
+#handle.open svg{transform:rotate(180deg)}
+
+/* ── PANEL ── */
+#panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 264px;
+  height: 100vh;
+  background: var(--panel);
+  border-left: 1px solid var(--rim);
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+
+  /* Important fixes */
+  pointer-events: auto;
+  will-change: transform;
+  backface-visibility: hidden;
+
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+}
+
+#panel.open {
+  transform: none;
+}
+
+#ph {
+  padding: 12px 12px 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--rim);
+}
+
+#ph-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+#ph-top span {
+  font-size: 16px;
+  color: var(--gold);
+}
+
+#ph-top h2 {
+  color: var(--gold);
+  font: 700 12px 'Cinzel', serif;
+  letter-spacing: 2px;
+  flex: 1;
+}
+
+#ph-top p {
+  color: var(--dim);
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+/* ── TABS ── */
+#tabs {
+  display: flex;
+  background: var(--ink);
+  width: 100%; /* Ensure it spans full width */
+}
+.tab {
+  flex: 1; /* This forces all tabs to take up equal space and fit the container */
+  padding: 7px 2px; /* Reduced side padding to prevent text overlap */
+  text-align: center;
+  cursor: pointer;
+  font-size: 7.5px;
+  letter-spacing: .3px; /* Slightly tighter spacing to help small screens */
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid transparent;
+  transition: .12s;
+  white-space: nowrap;
+  overflow: hidden; /* Safety: hide text if it's still too long */
+  text-overflow: ellipsis;
+}
+.tab:hover { color: #666; }
+.tab.on { 
+  color: var(--gold); 
+  border-bottom-color: var(--gold); 
+  background: var(--panel); 
+}
+/* ── PAGES ── */
+#pages{flex:1;overflow:hidden;position:relative}
+.page{position:absolute;inset:0;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;opacity:0;pointer-events:none;transition:opacity .12s;scrollbar-width:thin;scrollbar-color:var(--rim) transparent}
+.page.on{opacity:1;pointer-events:auto}
+.page::-webkit-scrollbar{width:2px}
+.page::-webkit-scrollbar-thumb{background:var(--rim)}
+
+/* ── SECTION ── */
+.sec{display:flex;flex-direction:column;gap:0}
+.slbl{color:var(--muted);font:8px 'Cinzel',serif;letter-spacing:1.5px;text-transform:uppercase;padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid var(--rim);display:flex;justify-content:space-between;align-items:center}
+.slbl-act{color:var(--dim);cursor:pointer;font:8px 'Fira Code',monospace;letter-spacing:.5px;transition:.1s}
+.slbl-act:hover{color:var(--gold)}
+
+/* ── PRESET GRID ── */
+.pgrid{display:grid;gap:3px;margin-bottom:4px}
+.pgrid.c4{grid-template-columns:repeat(4,1fr)}
+.pgrid.c3{grid-template-columns:repeat(3,1fr)}
+.qb{padding:6px 2px;background:#0d0d0d;color:var(--muted);border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:8px 'Fira Code',monospace;text-align:center;transition:.1s;display:flex;flex-direction:column;align-items:center;gap:2px}
+.qb .qi{font-size:11px;line-height:1}
+.qb .qn{font-size:7px;letter-spacing:.4px}
+.qb:hover{color:#666;background:#111}
+.qb.on{color:var(--gold);border-color:#c8a96e33;background:#111}
+.qb.lo.on{color:var(--warn);border-color:#ffa72633}
+.qb.hi.on{color:var(--info);border-color:#5c9cf533}
+
+/* ── ROWS ── */
+.row{display:flex;align-items:center;padding:3px 0;border-bottom:1px solid #0d0d0d;gap:6px}
+.rl{color:var(--muted);font-size:9px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.2px}
+.badge{font-size:6px;color:var(--muted);background:#0f0f0f;border:1px solid var(--rim);border-radius:1px;padding:1px 3px;flex-shrink:0;letter-spacing:.4px}
+.badge.p{color:var(--warn);border-color:#ffa72618}
+.badge.q{color:var(--info);border-color:#5c9cf518}
+
+/* ── SLIDER ── */
+.sl{-webkit-appearance:none;width:72px;height:1px;background:#202020;border-radius:1px;outline:none;cursor:pointer;flex-shrink:0}
+.sl::-webkit-slider-thumb{-webkit-appearance:none;width:8px;height:8px;border-radius:50%;background:var(--gold);cursor:pointer;box-shadow:0 0 4px #c8a96e44}
+.sl::-moz-range-thumb{width:8px;height:8px;border-radius:50%;background:var(--gold);border:none;cursor:pointer}
+.sv{color:var(--gold);font-size:9px;width:34px;text-align:right;flex-shrink:0;white-space:nowrap}
+
+/* ── TOGGLE ── */
+.tog{position:relative;width:24px;height:12px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0;position:absolute}
+.tsl{position:absolute;inset:0;background:#111;border:1px solid var(--rim2);border-radius:6px;cursor:pointer;transition:.12s}
+.tsl:before{content:'';position:absolute;width:8px;height:8px;left:1px;top:1px;background:#2a2a2a;border-radius:50%;transition:.12s}
+.tog input:checked+.tsl{border-color:#c8a96e33}
+.tog input:checked+.tsl:before{background:var(--gold);transform:translateX(12px);box-shadow:0 0 4px #c8a96e55}
+
+/* ── BUTTONS ── */
+.btn{width:100%;padding:5px 8px;background:#0d0d0d;color:var(--muted);border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:9px 'Fira Code',monospace;letter-spacing:.4px;text-align:left;transition:.1s;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden}
+.btn:hover{background:#121212;color:var(--gold);border-color:#c8a96e22}
+.btn:disabled{opacity:.25;pointer-events:none}
+.btn .bi{width:14px;text-align:center;flex-shrink:0;font-size:11px}
+.btn .bl{overflow:hidden;text-overflow:ellipsis;flex:1}
+.btn.ok:hover{color:var(--ok);border-color:#4caf5022}
+.btn.bad:hover{color:var(--bad);border-color:#ef535022}
+.btn.accent{color:#c8a96e44;border-color:#c8a96e18}
+.btn.accent:hover{color:var(--gold);border-color:#c8a96e33}
+.btn.warn:hover{color:var(--warn);border-color:#ffa72622}
+.btn.def{color:var(--info);border-color:#5c9cf622}
+.btn.def:hover{color:#7ab3ff;border-color:#5c9cf644}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+
+/* ── INFO ROWS ── */
+.ir{display:flex;justify-content:space-between;padding:2px 0;font-size:8px}
+.ik{color:var(--dim)}
+.iv{color:var(--muted);text-align:right;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── DIVIDER ── */
+.div{display:flex;align-items:center;gap:6px;margin:3px 0;font:7px 'Cinzel',serif;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+.div::before,.div::after{content:'';flex:1;height:1px;background:var(--rim)}
+
+/* ── CACHE BAR ── */
+#cbar{display:flex;align-items:center;justify-content:space-between;padding:5px 7px;background:#070707;border:1px solid var(--rim);border-radius:var(--r);font-size:8px;gap:6px}
+#cbar-lbl{color:var(--muted);flex:1}
+#cbar-pct{color:var(--gold);flex-shrink:0}
+#cprog-wrap{height:1px;background:#111;border-radius:1px;overflow:hidden}
+#cprog{height:100%;background:var(--gold);width:0%;transition:width .2s}
+
+/* ── CARDS ── */
+.card{background:#070707;border:1px solid var(--rim);border-radius:var(--r);padding:7px;display:flex;flex-direction:column;gap:5px}
+.card-title{color:var(--gold);font:8px 'Cinzel',serif;letter-spacing:2px;text-transform:uppercase}
+.card-desc{color:var(--dim);font-size:8px;line-height:1.5;letter-spacing:.2px}
+
+/* ── SAVE SLOTS ── */
+.slot{display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid #0d0d0d}
+.slot-name{flex:1;font-size:8px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot-name.active{color:var(--gold)}
+.slot-ts{font-size:7px;color:var(--dim);flex-shrink:0}
+.slot-btn{padding:2px 5px;background:#0d0d0d;border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:7px 'Fira Code',monospace;color:var(--dim);transition:.1s;flex-shrink:0}
+.slot-btn:hover{color:var(--gold);border-color:#c8a96e22}
+.slot-btn.bad:hover{color:var(--bad)}
+#slot-name-inp{flex:1;background:#070707;border:1px solid var(--rim);color:#666;padding:3px 5px;font:8px 'Fira Code',monospace;border-radius:var(--r);outline:none;min-width:0}
+#slot-name-inp:focus{border-color:#c8a96e22}
+
+/* ── URL / DROP ZONE ── */
+#url-row{display:flex;gap:3px}
+#save-url{flex:1;background:#070707;border:1px solid var(--rim);color:#555;padding:4px 6px;font:9px 'Fira Code',monospace;border-radius:var(--r);outline:none;min-width:0}
+#save-url:focus{border-color:#c8a96e22}
+#save-url::placeholder{color:#1c1c1c}
+#url-go{padding:4px 8px;background:#0d0d0d;color:var(--muted);border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:9px 'Fira Code',monospace;transition:.1s;flex-shrink:0}
+#url-go:hover{color:var(--gold);border-color:#c8a96e22}
+#dz{border:1px dashed #1a1a1a;border-radius:var(--r);padding:10px;text-align:center;cursor:pointer;transition:.15s}
+#dz:hover,#dz.drag{border-color:#c8a96e33;background:#c8a96e05}
+#dz p{color:#252525;font-size:8px;letter-spacing:.4px}
+#dz.has-file p{color:var(--gold)}
+
+/* ── LOCK BANNER ── */
+#lock-banner{background:#c8a96e0a;border:1px solid #c8a96e22;border-radius:var(--r);padding:5px 8px;display:none;font-size:8px;color:#c8a96e88;letter-spacing:.4px;text-align:center}
+#lock-banner.visible{display:block}
+
+/* ── LOG ── */
+#mlog{background:#070707;border:1px solid #111;border-radius:var(--r);padding:4px;height:180px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--rim) transparent}
+.ll{padding:1px 2px;white-space:pre-wrap;word-break:break-all;font-size:8px;line-height:1.4;border-bottom:1px solid #0a0a0a}
+.ll.ok{color:var(--ok)}.ll.err{color:var(--bad)}.ll.warn{color:var(--warn)}.ll.hi{color:var(--gold)}.ll.info{color:var(--info)}.ll.log{color:#444}.ll.debug{color:#333}
+/* console input */
+#con-row{display:flex;gap:3px;margin-top:4px}
+#con-inp{flex:1;background:#070707;border:1px solid var(--rim);color:#888;padding:3px 6px;font:8px 'Fira Code',monospace;border-radius:var(--r);outline:none}
+#con-inp:focus{border-color:#c8a96e22;color:#aaa}
+#con-inp::placeholder{color:#1c1c1c}
+#con-send{padding:3px 7px;background:#0d0d0d;border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:8px 'Fira Code',monospace;color:var(--dim);transition:.1s;flex-shrink:0}
+#con-send:hover{color:var(--gold);border-color:#c8a96e22}
+
+#tab-console { display:none; flex-direction:column; height:100%; }
+#cons-out { 
+  flex:1; background:#050505; border:1px solid #1a1a1a; 
+  padding:8px; font:11px monospace; overflow-y:auto; 
+  color:#bbb; white-space:pre-wrap; word-break:break-all;
+}
+.cons-log { border-bottom:1px solid #111; padding:2px 0; }
+.cons-err { color:#ff5555; }
+.cons-warn { color:#ffb86c; }
+.cons-cmd { color:#50fa7b; font-weight:bold; }
+#cons-in { 
+  background:#111; border:1px solid #222; color:#eee; 
+  padding:8px; font:12px monospace; outline:none; width:100%;
+}
+/* ── CONTROLLER ── */
+#ctrl-vis{background:#070707;border:1px solid var(--rim);border-radius:var(--r);padding:8px;display:flex;flex-direction:column;gap:6px}
+.ctrl-axes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stick-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}
+.stick-label{font-size:7px;color:var(--dim);letter-spacing:.5px}
+.stick-bg{width:48px;height:48px;border:1px solid var(--rim);border-radius:50%;position:relative;background:#050505}
+.stick-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transition:transform .03s;box-shadow:0 0 4px #c8a96e55}
+.ctrl-btns{display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.cbtn{width:100%;aspect-ratio:1;background:#0d0d0d;border:1px solid var(--rim);border-radius:2px;font-size:6px;color:#1a1a1a;display:flex;align-items:center;justify-content:center;transition:.08s;cursor:default;overflow:hidden;text-overflow:clip}
+.cbtn.pressed{background:#c8a96e22;border-color:#c8a96e44;color:var(--gold)}
+.ctrl-map-row{display:flex;align-items:center;gap:4px;padding:2px 0;border-bottom:1px solid #0d0d0d}
+.ctrl-map-lbl{font-size:8px;color:var(--dim);flex:1}
+.ctrl-map-sel{background:#070707;border:1px solid var(--rim);color:#555;padding:2px 4px;font:7px 'Fira Code',monospace;border-radius:var(--r);outline:none;flex-shrink:0;cursor:pointer}
+.ctrl-map-sel:focus{border-color:#c8a96e22}
+
+/* ── CB NOTE ── */
+#cb-note{background:#5c9cf50a;border:1px solid #5c9cf522;border-radius:var(--r);padding:6px 8px;font-size:8px;color:#5c9cf599;letter-spacing:.3px;line-height:1.6}
+
+/* ── SESSION TOAST ── */
+#session-toast{position:fixed;bottom:36px;left:10px;padding:4px 10px;background:rgba(0,0,0,.9);border:1px solid var(--warn);border-radius:var(--r);font-size:8px;color:var(--warn);z-index:9999;pointer-events:none;letter-spacing:.4px;opacity:0;transition:opacity .4s;display:none}
+#session-toast.show{opacity:1}
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+
+<div id="ls">
+  <div id="ls-icon">⚔</div>
+  <h1>Hollow Knight</h1>
+  <div id="ls-bar"><div id="ls-fill"></div></div>
+  <div id="ls-pct">0%</div>
+  <div id="ls-sub">Awakening…</div>
+</div>
+
+<canvas id="unity-canvas"></canvas>
+<video id="hkv" playsinline webkit-playsinline muted></video>
+<div id="fps"><canvas id="fpc"></canvas></div>
+<div id="pill">○ not cached</div>
+<div id="session-toast">⚠ Long session — a reload may help performance</div>
+
+<div id="handle" onclick="togglePanel()">
+  <svg width="5" height="9" viewBox="0 0 8 14" fill="none">
+    <polyline points="6,1 2,7 6,13" stroke="#444" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+</div>
+
+<div id="panel">
+  <div id="ph">
+    <div id="ph-top">
+      <span>⚔</span>
+      <div><h2>HK Tools</h2><p>Configuration Vessel</p></div>
+    </div>
+    <div id="tabs">
+      <div class="tab on"  data-t="pre" onclick="tab('pre')">Preset</div>
+      <div class="tab"     data-t="cpu" onclick="tab('cpu')">CPU</div>
+      <div class="tab"     data-t="mem" onclick="tab('mem')">Memory</div>
+      <div class="tab"     data-t="gpu" onclick="tab('gpu')">GPU</div>
+      <div class="tab"     data-t="cch" onclick="tab('cch')">Cache</div>
+      <div class="tab"     data-t="sav" onclick="tab('sav')">Save</div>
+      <div class="tab"     data-t="ctl" onclick="tab('ctl')">Ctrl</div>
+      <div class="tab"     data-t="log" onclick="tab('log')">Log</div>
+    </div>
+  </div>
+
+  <div id="pages">
+
+    <!-- PRESET -->
+    <div class="page on" id="page-pre">
+      <div id="cb-note">🖥 Chromebook detected — <strong>Chromebook Safe</strong> preset recommended.</div>
+      <div id="lock-banner">🔒 Default mode active — all settings locked to Unity defaults</div>
+      <div class="sec">
+        <div class="slbl">Nightmare</div>
+        <div class="pgrid c3">
+          <button class="qb lo" data-q="potato"   onclick="applyPreset('potato')"  ><span class="qi">🪨</span><span class="qn">Potato</span></button>
+          <button class="qb lo" data-q="minimal"  onclick="applyPreset('minimal')" ><span class="qi">💀</span><span class="qn">Minimal</span></button>
+          <button class="qb lo" data-q="superlow" onclick="applyPreset('superlow')"><span class="qi">⬇</span><span class="qn">S.Low</span></button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Standard</div>
+        <div class="pgrid c4">
+          <button class="qb"    data-q="cbsafe" onclick="applyPreset('cbsafe')"><span class="qi">🖥</span><span class="qn">CB Safe</span></button>
+          <button class="qb"    data-q="low"    onclick="applyPreset('low')"   ><span class="qi">🕯</span><span class="qn">Low</span></button>
+          <button class="qb on" data-q="medium" onclick="applyPreset('medium')"><span class="qi">🌙</span><span class="qn">Medium</span></button>
+          <button class="qb hi" data-q="high"   onclick="applyPreset('high')"  ><span class="qi">⭐</span><span class="qn">High</span></button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Actions</div>
+        <button class="btn accent" onclick="autoOptimize()"><span class="bi">🔮</span><span class="bl">Auto-Detect Best Preset</span></button>
+        <button class="btn def"    onclick="toggleDefault()"><span class="bi">🔒</span><span class="bl" id="def-lbl">Lock to Unity Defaults</span></button>
+        <button class="btn warn"   onclick="turboGC()"     ><span class="bi">🧹</span><span class="bl">Force GC / Free Memory</span></button>
+        <button class="btn"        onclick="reloadGame()"  ><span class="bi">🔄</span><span class="bl">Reload Game (no page reload)</span></button>
+      </div>
+      <div class="sec">
+        <div class="slbl">Device</div>
+        <div class="ir"><span class="ik">CPU Cores</span><span class="iv" id="inf-cores">—</span></div>
+        <div class="ir"><span class="ik">Est. RAM</span><span class="iv" id="inf-ram">—</span></div>
+        <div class="ir"><span class="ik">GPU</span><span class="iv" id="inf-gpu">—</span></div>
+        <div class="ir"><span class="ik">Active Preset</span><span class="iv" id="inf-pre">—</span></div>
+        <div class="ir"><span class="ik">Heap Used</span><span class="iv" id="inf-heap">—</span></div>
+      </div>
+    </div>
+
+    <!-- CPU -->
+    <div class="page" id="page-cpu">
+      <div class="sec">
+        <div class="slbl">Frame Rate</div>
+        <div class="row"><span class="rl">FPS Cap</span><input type="range" class="sl" id="fps-cap" min="0" max="7" step="1" value="0"><span class="sv" id="fps-cap-v">∞</span></div>
+        <div class="row"><span class="rl">Frame Pacing</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-pace" onchange="S('framePacing',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Input</div>
+        <div class="row"><span class="rl">SIMD</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-simd" onchange="S('simd',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Capture Keyboard</span><label class="tog"><input type="checkbox" id="tog-kbd" onchange="S('captureAllKeyboardInput',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Sticky Cursor Lock</span><label class="tog"><input type="checkbox" id="tog-sticky" onchange="S('stickyCursorLock',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Particles</div>
+        <div class="row"><span class="rl">Particle Budget</span><input type="range" class="sl" id="particle-b" min="0" max="4" step="1" value="2"><span class="sv" id="particle-b-v">512</span></div>
+        <div class="row"><span class="rl">Disable Particles</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-nopart" onchange="S('disableParticles',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+    </div>
+
+    <!-- MEMORY -->
+    <div class="page" id="page-mem">
+      <div class="sec">
+        <div class="slbl">Heap</div>
+        <div class="row"><span class="rl">Heap Size (MB)</span><input type="range" class="sl" id="mem-sl" min="64" max="1024" step="64" value="256"><span class="sv" id="mem-v">256</span></div>
+        <p style="color:var(--dim);font-size:8px;padding:3px 0;line-height:1.5">Recommended: 192–384 MB on Chromebook. Applies on game reload.</p>
+        <button class="btn warn" onclick="reloadGame()"><span class="bi">🔄</span><span class="bl">Apply & Reload Game</span></button>
+      </div>
+      <div class="sec">
+        <div class="slbl">WebGL Context</div>
+        <div class="row"><span class="rl">Depth Buffer</span><label class="tog"><input type="checkbox" id="tog-depth" onchange="S('depth',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Stencil Buffer</span><label class="tog"><input type="checkbox" id="tog-stencil" onchange="S('stencil',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Preserve Draw Buffer</span><label class="tog"><input type="checkbox" id="tog-pdb" onchange="S('preserveDrawingBuffer',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Desynchronized</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-desync" onchange="S('desynchronized',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Pressure Monitor</div>
+        <div class="row"><span class="rl">Auto-Drop Res at 85% Heap</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-mempres" onchange="S('memPressure',this.checked)"><span class="tsl"></span></label></div>
+        <div class="ir"><span class="ik">Heap Used</span><span class="iv" id="heap-live">—</span></div>
+        <div class="ir"><span class="ik">Heap Limit</span><span class="iv" id="heap-limit">—</span></div>
+      </div>
+    </div>
+
+    <!-- GPU -->
+    <div class="page" id="page-gpu">
+      <div class="sec">
+        <div class="slbl">Resolution</div>
+        <div class="row"><span class="rl">Render Scale</span><input type="range" class="sl" id="res-sl" min="0" max="8" step="1" value="5"><span class="sv" id="res-v">50%</span></div>
+        <div class="row"><span class="rl">DPI Scale</span><input type="range" class="sl" id="dpi-sl" min="1" max="30" step="1" value="10"><span class="sv" id="dpi-v">1.0×</span></div>
+        <div class="row"><span class="rl">High-Performance GPU</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-hpgpu" onchange="S('powerPreference',this.checked?'high-performance':'default')"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Anti-Aliasing</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-aa" onchange="S('antialias',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Shadows</div>
+        <div class="row"><span class="rl">Enable Shadows</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-shad" onchange="S('shadows',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Shadow Quality</span><input type="range" class="sl" id="shad-q" min="0" max="3" step="1" value="1"><span class="sv" id="shad-q-v">Low</span></div>
+        <div class="row"><span class="rl">Soft Shadows</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-soft" onchange="S('softShadows',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Post FX</div>
+        <div class="row"><span class="rl">Bloom</span><label class="tog"><input type="checkbox" id="tog-bloom" onchange="S('bloom',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Bloom Intensity</span><input type="range" class="sl" id="bloom-i" min="0" max="10" step="1" value="3"><span class="sv" id="bloom-i-v">0.3</span></div>
+        <div class="row"><span class="rl">Vignette</span><label class="tog"><input type="checkbox" id="tog-vig" onchange="S('vignette',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Color Grading</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-lut" onchange="S('colorGrading',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Motion Blur</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-mb" onchange="S('motionBlur',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Disable All Post FX</span><span class="badge p">perf</span><label class="tog"><input type="checkbox" id="tog-nopost" onchange="S('disablePostFX',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Textures</div>
+        <div class="row"><span class="rl">Texture Quality</span><input type="range" class="sl" id="tex-q" min="0" max="3" step="1" value="2"><span class="sv" id="tex-q-v">½</span></div>
+        <div class="row"><span class="rl">Anisotropic Filtering</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-af" onchange="S('anisotropicFiltering',this.checked)"><span class="tsl"></span></label></div>
+        <div class="row"><span class="rl">Normal Maps</span><span class="badge q">qual</span><label class="tog"><input type="checkbox" id="tog-norm" onchange="S('normalMaps',this.checked)"><span class="tsl"></span></label></div>
+      </div>
+    </div>
+
+    <!-- CACHE -->
+    <div class="page" id="page-cch">
+      <div class="sec">
+        <div class="slbl">Background Cache</div>
+        <div id="cbar"><span id="cbar-lbl">Checking…</span><span id="cbar-pct">—</span></div>
+        <div id="cprog-wrap"><div id="cprog"></div></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Status</div>
+        <div class="ir"><span class="ik">Files Cached</span><span class="iv" id="cc-count">—</span></div>
+        <div class="ir"><span class="ik">Total Files</span><span class="iv" id="cc-total">—</span></div>
+        <div class="ir"><span class="ik">State</span><span class="iv" id="cc-state">—</span></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Manage</div>
+        <button class="btn bad" onclick="clearCache()"><span class="bi">🗑</span><span class="bl">Clear All Cached Files</span></button>
+      </div>
+    </div>
+
+    <!-- SAVE -->
+    <div class="page" id="page-sav">
+      <!-- Multi-slot manager -->
+      <div class="card">
+        <div class="card-title">💾 Save Slots</div>
+        <div class="card-desc">Name and manage up to 8 independent save states. Active slot loads on game reload.</div>
+        <div id="slot-list"></div>
+        <div style="display:flex;gap:3px;margin-top:3px">
+          <input id="slot-name-inp" placeholder="New slot name…" maxlength="24">
+          <button class="slot-btn" onclick="createSlot()">+ New</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">⬇ Back Up Active Save</div>
+        <div class="card-desc">Downloads current in-game progress as JSON.</div>
+        <button class="btn ok" onclick="doDownloadSave()"><span class="bi">⬇</span><span class="bl">Download Save File</span></button>
+      </div>
+      <div class="card">
+        <div class="card-title">⬆ Restore Into Active Slot</div>
+        <div class="card-desc">Drop a save file or click to browse, then inject into the active slot.</div>
+        <div id="dz"><p id="dz-lbl">Drop hk-save.json here or click</p></div>
+        <input type="file" id="fi" accept=".json,.dat" style="display:none">
+        <button class="btn ok" id="inj-btn" onclick="doInjectSave()" disabled><span class="bi">⬆</span><span class="bl">Inject Save & Reload Game</span></button>
+      </div>
+      <div class="card">
+        <div class="card-title">🔗 Load from URL</div>
+        <div id="url-row">
+          <input id="save-url" placeholder="https://…/hk-save.json" type="url">
+          <button id="url-go" onclick="fetchAndSaveHK()">Fetch</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLLER -->
+    <div class="page" id="page-ctl">
+      <div class="sec">
+        <div class="slbl">Detected Gamepad</div>
+        <div class="ir"><span class="ik">Pad</span><span class="iv" id="gp-name">None</span></div>
+        <div class="ir"><span class="ik">Type</span><span class="iv" id="gp-type">—</span></div>
+        <div class="ir"><span class="ik">Emitting as</span><span class="iv">Xbox 360</span></div>
+      </div>
+      <div id="ctrl-vis">
+        <div class="ctrl-axes">
+          <div class="stick-wrap">
+            <div class="stick-label">LEFT STICK</div>
+            <div class="stick-bg"><div class="stick-dot" id="sd-l"></div></div>
+          </div>
+          <div class="stick-wrap">
+            <div class="stick-label">RIGHT STICK</div>
+            <div class="stick-bg"><div class="stick-dot" id="sd-r"></div></div>
+          </div>
+        </div>
+        <div class="ctrl-btns" id="cbtn-grid"></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Deadzone</div>
+        <div class="row"><span class="rl">Stick Deadzone</span><input type="range" class="sl" id="dz-sl" min="0" max="40" step="1" value="10"><span class="sv" id="dz-v">10%</span></div>
+      </div>
+      <div class="sec">
+        <div class="slbl">Button Remap <span class="slbl-act" onclick="resetRemap()">reset</span></div>
+        <div id="remap-rows"></div>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div class="page" id="page-log">
+      <div class="sec">
+        <div class="slbl">Console <span class="slbl-act" onclick="clearLog()">clear</span></div>
+        <div id="mlog"></div>
+        <div id="con-row">
+          <input id="con-inp" placeholder="SendMessage / JS eval…" onkeydown="if(event.key==='Enter')conSend()">
+          <button id="con-send" onclick="conSend()">▶</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pages -->
+</div><!-- /panel -->
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+//  AUDIO POOL  (48-element cap, prevents Chrome audio limit)
+// ═══════════════════════════════════════════════════════════
+(()=>{
+  const SZ=48, pool=[], used=new WeakSet();
+  for(let i=0;i<SZ;i++){const e=document.createElement('audio');e.preload='none';pool.push(e);}
+  const get=()=>{
+    for(const e of pool) if(!used.has(e)&&e.paused&&e.readyState===0) return e;
+    for(const e of pool) if(e.paused){e.pause();e.src='';e.load();used.delete(e);return e;}
+    pool[0].pause();pool[0].src='';pool[0].load();used.delete(pool[0]);return pool[0];
+  };
+  const NA=window.Audio;
+  window.Audio=function(src){const e=get();used.add(e);if(src)e.src=src;return e;};
+  Object.assign(window.Audio,NA);
+  const nCE=document.createElement.bind(document);
+  document.createElement=(t,...a)=>{
+    if(t.toLowerCase()==='audio'){const e=get();used.add(e);return e;}
+    return nCE(t,...a);
+  };
+  for(const e of pool){
+    e.addEventListener('ended',()=>used.delete(e));
+    e.addEventListener('error',()=>{e.src='';used.delete(e);});
+    e.addEventListener('emptied',()=>used.delete(e));
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  XHR THROTTLE  (3 concurrent, 100ms drain gap)
+// ═══════════════════════════════════════════════════════════
+(()=>{
+  const _X=window.XMLHttpRequest, Q=[], CON=3, DELAY=100;
+  let act=0;
+  const drain=()=>{if(act>=CON||!Q.length)return;act++;Q.shift()();};
+  window.XMLHttpRequest=function(){
+    const xhr=new _X(), _o=xhr.open.bind(xhr), _s=xhr.send.bind(xhr);
+    let stream=false, oa;
+    xhr.open=(...a)=>{stream=/sharedassets|resources\.resource/.test(a[1]||'');oa=a;if(!stream)_o(...a);};
+    xhr.send=b=>{
+      if(!stream){_s(b);return;}
+      Q.push(()=>{
+        _o(...oa);
+        const done=()=>{act--;setTimeout(drain,DELAY);};
+        const ol=xhr.onload, oe=xhr.onerror;
+        xhr.onload=e=>{done();ol&&ol.call(xhr,e);};
+        xhr.onerror=e=>{done();oe&&oe.call(xhr,e);};
+        _s(b);
+      });
+      drain();
+    };
+    return xhr;
+  };
+  Object.assign(window.XMLHttpRequest,_X);
+})();
+
+window.addEventListener('beforeunload',e=>{e.preventDefault();e.returnValue='';});
+
+// ═══════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════
+const SK='hk_cfg_v6';
+const DEF={
+  fpsCap:0,framePacing:false,simd:true,captureAllKeyboardInput:true,stickyCursorLock:true,
+  disableParticles:false,particleBudget:512,
+  memory:256,depth:true,stencil:false,preserveDrawingBuffer:false,desynchronized:true,memPressure:false,
+  resolution:5,dpiScale:1.0,powerPreference:'high-performance',antialias:false,
+  shadows:true,shadowQuality:1,softShadows:false,
+  bloom:true,bloomIntensity:0.3,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,
+  textureQuality:2,anisotropicFiltering:false,normalMaps:true,
+  preset:'medium',locked:false,
+  deadzone:10,
+  // button remap: indexed by Xbox button index, value = physical button index
+  remap:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
+};
+let C={...DEF};
+const load=()=>{try{const s=localStorage.getItem(SK);if(s)C={...DEF,...JSON.parse(s)};}catch(e){}};
+const save=()=>{try{localStorage.setItem(SK,JSON.stringify(C));}catch(e){}};
+const S=(k,v)=>{if(C.locked&&k!=='locked')return;C[k]=v;save();};
+
+// ═══════════════════════════════════════════════════════════
+//  LOOKUP TABLES
+// ═══════════════════════════════════════════════════════════
+const RES=[
+  {v:.10,l:'10%'},{v:.17,l:'17%'},{v:.25,l:'25%'},{v:.33,l:'33%'},
+  {v:.42,l:'42%'},{v:.50,l:'50%'},{v:.60,l:'60%'},{v:.75,l:'75%'},{v:1,l:'100%'}
+];
+const SHAD=['Off','Low','Med','Ultra'];
+const TEX=['1/8','1/4','½','Full'];
+const PB=[64,256,512,1024,4096], PBL=['64','256','512','1k','4k'];
+const FPS_V=[0,15,24,30,45,60,90,120], FPS_L=['∞','15','24','30','45','60','90','120'];
+
+// Xbox 360 button labels (Unity standard mapping)
+const BTN_LABELS=['A','B','X','Y','LB','RB','SL','SR','↩','▶','LS','RS','↑','↓','←','→','⊙'];
+
+// ═══════════════════════════════════════════════════════════
+//  PRESETS
+// ═══════════════════════════════════════════════════════════
+const PRESETS={
+  potato: {resolution:0,dpiScale:.4,memory:64,antialias:false,depth:false,stencil:false,desynchronized:true,powerPreference:'default',shadows:false,softShadows:false,shadowQuality:0,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
+  minimal: {resolution:1,dpiScale:.5,memory:128,antialias:false,depth:false,stencil:false,desynchronized:true,powerPreference:'default',shadows:false,softShadows:false,shadowQuality:0,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
+  superlow:{resolution:2,dpiScale:.75,memory:128,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'default',shadows:false,softShadows:false,shadowQuality:0,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:1,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:false,particleBudget:256},
+  cbsafe:  {resolution:3,dpiScale:1,memory:192,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'default',shadows:false,softShadows:false,shadowQuality:0,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:30,disableParticles:false,particleBudget:256},
+  low:     {resolution:3,dpiScale:.75,memory:192,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'default',shadows:true,softShadows:false,shadowQuality:0,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:256},
+  medium:  {resolution:5,dpiScale:1,memory:256,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'high-performance',shadows:true,softShadows:false,shadowQuality:1,bloom:true,bloomIntensity:.3,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:2,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:512},
+  high:    {resolution:7,dpiScale:1,memory:384,antialias:false,depth:true,stencil:false,desynchronized:true,powerPreference:'high-performance',shadows:true,softShadows:true,shadowQuality:2,bloom:true,bloomIntensity:.4,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:3,anisotropicFiltering:true,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:1024},
+};
+
+function applyPreset(n){
+  if(!PRESETS[n])return;
+  const wasLocked=C.locked; C.locked=false;
+  Object.assign(C,PRESETS[n],{preset:n});
+  C.locked=wasLocked; save(); syncUI(); applyRes();
+  mlog('Preset: '+n,'hi');
+  if(wasLocked) mlog('Preset applied but lock is active — changes not persisted','warn');
+}
+
+function toggleDefault(){
+  C.locked=!C.locked; save();
+  document.getElementById('def-lbl').textContent=C.locked?'Unlock (Using Unity Defaults)':'Lock to Unity Defaults';
+  document.getElementById('lock-banner').classList.toggle('visible',C.locked);
+  mlog(C.locked?'Locked to Unity defaults':'Unlocked — custom settings active',C.locked?'warn':'ok');
+  syncUI();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  AUTO-OPTIMIZE  (fixed GPU scoring order)
+// ═══════════════════════════════════════════════════════════
+async function autoOptimize(){
+  mlog('Benchmarking…','hi');
+  let s=0;
+  s+=Math.min(navigator.hardwareConcurrency||2,16)*3;
+  s+=Math.min(navigator.deviceMemory||1,8)*5;
+
+  const cvt=document.createElement('canvas');
+  const gl=cvt.getContext('webgl')||cvt.getContext('experimental-webgl');
+  if(gl){
+    const ext=gl.getExtension('WEBGL_debug_renderer_info');
+    if(ext){
+      const r=(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)||'').toLowerCase();
+      document.getElementById('inf-gpu').textContent=r||'unknown';
+      // Most-specific first to avoid broad matches swallowing narrow ones
+      if(/m[34]\s*(pro|max|ultra)|rtx\s*[4-9]/.test(r))       s+=60;
+      else if(/m[12]\s*(pro|max)|rtx\s*[23]/.test(r))          s+=40;
+      else if(/rtx\s*1|gtx\s*16|m1(?!\s)/.test(r))             s+=25;
+      else if(/gtx\s*[89]00|gtx\s*10/.test(r))                 s+=15;
+      else if(/celeron|n40[0-9]{2}|n30[0-9]{2}/.test(r))       s+=2;  // Chromebook Celeron first
+      else if(/intel\s*(uhd|hd)/.test(r))                      s+=4;
+      else                                                       s+=10;
+    }
+  }
+
+  const t0=performance.now(); let x=0;
+  for(let i=0;i<4e6;i++) x=Math.sqrt(i*1.0001+x);
+  const el=performance.now()-t0;
+  s+=el<30?20:el<60?12:el<120?5:1;
+
+  if(/Android|iPhone|iPad/.test(navigator.userAgent)) s=Math.floor(s*.5);
+  if(/CrOS/.test(navigator.userAgent)) s=Math.min(s,22);
+
+  const chosen=s>=55?'high':s>=35?'medium':s>=20?'low':s>=12?'cbsafe':s>=6?'superlow':'potato';
+  mlog(`Score ${s} → ${chosen}`,'ok');
+  applyPreset(chosen);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TURBO GC
+// ═══════════════════════════════════════════════════════════
+const _blobUrls=new Set();
+function turboGC(){
+  // Revoke only blobs we own (never the active Unity blobs)
+  _blobUrls.forEach(u=>URL.revokeObjectURL(u));
+  _blobUrls.clear();
+  mlog('Blobs freed','ok');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SYNC UI
+// ═══════════════════════════════════════════════════════════
+function syncUI(){
+  document.querySelectorAll('.qb').forEach(b=>b.classList.toggle('on',b.dataset.q===C.preset));
+  document.getElementById('def-lbl').textContent=C.locked?'Unlock (Using Unity Defaults)':'Lock to Unity Defaults';
+  document.getElementById('lock-banner').classList.toggle('visible',C.locked);
+
+  const disable=C.locked;
+  ['res-sl','dpi-sl','mem-sl','fps-cap','shad-q','bloom-i','tex-q','particle-b'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.disabled=disable;
+  });
+  document.querySelectorAll('.tog input').forEach(el=>el.disabled=disable);
+  document.querySelectorAll('.qb').forEach(b=>b.disabled=disable);
+
+  sv('res-sl',    C.resolution,                               i=>RES[i].l,           'res-v');
+  sv('dpi-sl',    Math.round(C.dpiScale*10),                  i=>(i/10).toFixed(1)+'×','dpi-v');
+  sv('mem-sl',    C.memory,                                   i=>i,                  'mem-v');
+  sv('fps-cap',   Math.max(0,FPS_V.indexOf(C.fpsCap)),        i=>FPS_L[i],           'fps-cap-v');
+  sv('shad-q',    C.shadowQuality,                            i=>SHAD[i],            'shad-q-v');
+  sv('bloom-i',   Math.round(C.bloomIntensity*10),            i=>(i/10).toFixed(1),  'bloom-i-v');
+  sv('tex-q',     C.textureQuality,                           i=>TEX[i],             'tex-q-v');
+  sv('particle-b',Math.max(0,PB.indexOf(C.particleBudget)),   i=>PBL[i],             'particle-b-v');
+  sv('dz-sl',     C.deadzone,                                 i=>i+'%',              'dz-v');
+
+  const TM={
+    'tog-pace':'framePacing','tog-simd':'simd','tog-kbd':'captureAllKeyboardInput','tog-sticky':'stickyCursorLock',
+    'tog-nopart':'disableParticles','tog-depth':'depth','tog-stencil':'stencil',
+    'tog-pdb':'preserveDrawingBuffer','tog-desync':'desynchronized','tog-mempres':'memPressure',
+    'tog-hpgpu':null,'tog-aa':'antialias','tog-shad':'shadows','tog-soft':'softShadows',
+    'tog-bloom':'bloom','tog-vig':'vignette','tog-lut':'colorGrading','tog-mb':'motionBlur',
+    'tog-nopost':'disablePostFX','tog-af':'anisotropicFiltering','tog-norm':'normalMaps',
+  };
+  for(const[id,k]of Object.entries(TM)){
+    const el=document.getElementById(id); if(!el) continue;
+    el.checked=k===null?C.powerPreference==='high-performance':!!C[k];
+  }
+
+  document.getElementById('inf-cores').textContent=navigator.hardwareConcurrency||'?';
+  document.getElementById('inf-ram').textContent=(navigator.deviceMemory||'?')+'GB';
+  document.getElementById('inf-pre').textContent=C.preset||'custom';
+
+  renderRemapRows();
+  renderSlotList();
+}
+function sv(id,val,fmt,vid){
+  const el=document.getElementById(id); if(!el) return;
+  el.value=val;
+  const vEl=document.getElementById(vid); if(vEl) vEl.textContent=fmt(+val);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TABS / PANEL
+// ═══════════════════════════════════════════════════════════
+let cv=document.getElementById('unity-canvas');
+const hkv=document.getElementById('hkv');
+let unityInstance=null;
+
+function tab(n){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.t===n));
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='page-'+n));
+}
+function togglePanel() {
+    const p = document.getElementById('panel');
+    p.classList.toggle('open');
+    
+    if (p.classList.contains('open')) {
+        // When opening the panel, briefly blur Unity to unlock the keyboard
+        window.blur();
+        window.focus();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FULL CONSOLE INTERCEPT  (log / warn / error / info / debug)
+// ═══════════════════════════════════════════════════════════
+(()=>{
+  const levels={log:'log',warn:'warn',error:'err',info:'info',debug:'debug'};
+  for(const[lvl,cls]of Object.entries(levels)){
+    const orig=console[lvl].bind(console);
+    console[lvl]=(...args)=>{
+      orig(...args);
+      const msg=args.map(a=>{
+        if(typeof a==='string') return a;
+        try{return JSON.stringify(a);}catch{return String(a);}
+      }).join(' ');
+      // Cutscene detection (log only)
+      if(lvl==='log'){
+        const m=msg.match(/(?:Started|Playing)\s+cinematic\s+'?(\w+)'?/i);
+        if(m&&csState==='idle') csPlay(m[1]);
+        if(/Stopped\s+cinematic/i.test(msg)){hkv.style.display='none';hkv.pause();csState='idle';}
+      }
+      mlog(msg,cls);
+    };
+  }
+})();
+
+const mlog=(msg,cls='log')=>{
+  const el=document.getElementById('mlog');
+  const d=document.createElement('div');
+  d.className='ll '+cls;
+  const t=new Date();
+  d.textContent=`${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')} ${msg}`;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+  if(el.childNodes.length>200) el.removeChild(el.firstChild);
+};
+const clearLog=()=>document.getElementById('mlog').innerHTML='';
+
+// Console input: try SendMessage first, fall back to eval
+function conSend(){
+  const inp=document.getElementById('con-inp');
+  const txt=inp.value.trim(); if(!txt) return;
+  mlog('> '+txt,'hi');
+  inp.value='';
+  // SendMessage syntax: "Object/Method/Param"
+  const sm=txt.match(/^(\S+)\s*\/\s*(\S+)(?:\s*\/\s*(.*))?$/);
+  if(sm&&unityInstance){
+    try{unityInstance.SendMessage(sm[1],sm[2],sm[3]||'');mlog('SendMessage OK','ok');}
+    catch(e){mlog('SendMessage err: '+e.message,'err');}
+    return;
+  }
+  // Fallback: JS eval
+  try{
+    // eslint-disable-next-line no-eval
+    const res=eval(txt);
+    if(res!==undefined) mlog(String(res),'ok');
+  }catch(e){mlog(e.message,'err');}
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER RESOLUTION
+// ═══════════════════════════════════════════════════════════
+function applyRes(){
+  const idx=Math.min(+document.getElementById('res-sl').value,RES.length-1);
+  const s=RES[idx].v;
+  cv.width=Math.round(window.innerWidth*s*(C.dpiScale||1));
+  cv.height=Math.round(window.innerHeight*s*(C.dpiScale||1));
+  cv.style.cssText='width:100vw;height:100vh;image-rendering:'+(s<.6?'pixelated':'auto');
+}
+window.addEventListener('resize',applyRes);
+
+// ═══════════════════════════════════════════════════════════
+//  WIRE SLIDERS
+// ═══════════════════════════════════════════════════════════
+const wire=(id,fn)=>{const e=document.getElementById(id);if(e)e.oninput=function(){if(!C.locked)fn(this);};};
+wire('res-sl',    e=>{C.resolution=+e.value;C.preset='custom';save();document.getElementById('res-v').textContent=RES[+e.value].l;applyRes();});
+wire('dpi-sl',    e=>{C.dpiScale=+e.value/10;save();document.getElementById('dpi-v').textContent=C.dpiScale.toFixed(1)+'×';applyRes();});
+wire('mem-sl',    e=>{C.memory=+e.value;save();document.getElementById('mem-v').textContent=e.value;});
+wire('fps-cap',   e=>{C.fpsCap=FPS_V[+e.value]||0;save();document.getElementById('fps-cap-v').textContent=FPS_L[+e.value];});
+wire('shad-q',    e=>{C.shadowQuality=+e.value;save();document.getElementById('shad-q-v').textContent=SHAD[+e.value];});
+wire('bloom-i',   e=>{C.bloomIntensity=+e.value/10;save();document.getElementById('bloom-i-v').textContent=C.bloomIntensity.toFixed(1);});
+wire('tex-q',     e=>{C.textureQuality=+e.value;save();document.getElementById('tex-q-v').textContent=TEX[+e.value];});
+wire('particle-b',e=>{C.particleBudget=PB[+e.value]||512;save();document.getElementById('particle-b-v').textContent=PBL[+e.value];});
+wire('dz-sl',     e=>{C.deadzone=+e.value;save();document.getElementById('dz-v').textContent=e.value+'%';});
+
+// ═══════════════════════════════════════════════════════════
+//  FPS GRAPH
+// ═══════════════════════════════════════════════════════════
+const fpc=document.getElementById('fpc'); fpc.width=168; fpc.height=44;
+const fctx=fpc.getContext('2d');
+const fhist=[]; let lft=performance.now(), fr=0;
+(function uf(){
+  const now=performance.now(), fps=1000/(now-lft); lft=now; fr++;
+  if(fr%3===0){
+    fhist.push(fps); if(fhist.length>84) fhist.shift();
+    fctx.clearRect(0,0,168,44);
+    fhist.forEach((f,i)=>{
+      fctx.fillStyle=f>50?'#4caf50':f>30?'#ffa726':'#ef5350';
+      fctx.fillRect(i*2,44-Math.min(f/60,1)*30,1.8,Math.min(f/60,1)*30);
+    });
+    fctx.fillStyle='#c8a96e';fctx.font='bold 10px monospace';
+    fctx.shadowColor='#000';fctx.shadowBlur=3;
+    fctx.fillText(Math.round(fps)+' FPS',3,13);
+    fctx.shadowBlur=0;fctx.fillStyle='#333';fctx.font='7px monospace';
+    fctx.fillText(RES[Math.min(C.resolution,RES.length-1)].l+' | '+(C.preset||'custom'),3,26);
+  }
+  requestAnimationFrame(uf);
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  MEMORY PRESSURE MONITOR
+// ═══════════════════════════════════════════════════════════
+let _mpdropped=false;
+setInterval(()=>{
+  const m=performance.memory; if(!m) return;
+  const used=m.usedJSHeapSize, limit=m.jsHeapSizeLimit;
+  document.getElementById('heap-live').textContent=Math.round(used/1048576)+'MB';
+  document.getElementById('heap-limit').textContent=Math.round(limit/1048576)+'MB';
+  document.getElementById('inf-heap').textContent=Math.round(used/1048576)+'MB';
+  if(C.memPressure&&!_mpdropped&&used/limit>.85){
+    _mpdropped=true;
+    const idx=Math.max(0,+document.getElementById('res-sl').value-1);
+    document.getElementById('res-sl').value=idx; C.resolution=idx; save(); applyRes();
+    mlog('⚠ Heap >85% — render scale dropped','warn');
+  }
+  if(used/limit<.7) _mpdropped=false;
+},3000);
+
+// ═══════════════════════════════════════════════════════════
+//  CONTROLLER WRAPPER
+// ═══════════════════════════════════════════════════════════
+
+// Default remap tables: physical→Xbox360 index
+// PS4:  ×=0,○=1,□=2,△=3,L1=4,R1=5,L2=6,R2=7,share=8,options=9,L3=10,R3=11,↑=12,↓=13,←=14,→=15,PS=16
+// NSW:  B=0,A=1,Y=2,X=3,L=4,R=5,ZL=6,ZR=7,−=8,+=9,LS=10,RS=11,↑=12,↓=13,←=14,→=15,Home=16
+const REMAP_PROFILES={
+  'Xbox / XInput': [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
+  'PS4 / PS5':     [2,1,3,0,4,5,6,7,8,9,10,11,12,13,14,15,16],  // □→A,×→B,△→X,○→Y swap
+  'Nintendo Switch':[1,0,3,2,4,5,6,7,8,9,10,11,12,13,14,15,16],  // A/B and X/Y swapped
+};
+
+const _rGP=navigator.getGamepads?navigator.getGamepads.bind(navigator):()=>[];
+// Synthetic state fed to Unity
+const _gps={
+  axes:[0,0,0,0],
+  buttons:Array.from({length:17},()=>({pressed:false,touched:false,value:0}))
+};
+
+let _lastPadId='';
+function detectPadType(id){
+  const s=(id||'').toLowerCase();
+  if(/054c|dualshock|dualsense|ps[345]/i.test(s)) return 'PS4 / PS5';
+  if(/057e|nintendo|switch|joy.?con/i.test(s))    return 'Nintendo Switch';
+  return 'Xbox / XInput';
+}
+
+(function syncGP(){
+  const pads=_rGP();
+  let pad=null;
+  for(const p of pads){if(p&&p.connected){pad=p;break;}}
+
+  if(pad){
+    // Detect controller type and auto-apply remap profile on first connect or ID change
+    if(pad.id!==_lastPadId){
+      _lastPadId=pad.id;
+      const type=detectPadType(pad.id);
+      document.getElementById('gp-name').textContent=(pad.id||'Unknown').substring(0,32);
+      document.getElementById('gp-type').textContent=type;
+      // Only auto-set remap if user hasn't customized
+      if(JSON.stringify(C.remap)===JSON.stringify(DEF.remap)){
+        C.remap=[...REMAP_PROFILES[type]];
+        save();
+        mlog('Controller: '+type+' — remap applied','ok');
+        renderRemapRows();
+      }
+    }
+
+    const dz=C.deadzone/100;
+    // Map raw axes through deadzone
+    _gps.axes=Array.from({length:4},(_,i)=>{
+      const v=(pad.axes||[])[i]||0;
+      return Math.abs(v)<dz?0:v;
+    });
+
+    // Map physical buttons → Xbox layout via remap table
+    const phys=pad.buttons||[];
+    _gps.buttons=C.remap.map(physIdx=>{
+      const b=phys[physIdx];
+      if(!b) return {pressed:false,touched:false,value:0};
+      return typeof b==='object'?{pressed:b.pressed,touched:b.touched||b.pressed,value:b.value}:{pressed:!!b,touched:!!b,value:b?1:0};
+    });
+
+    // Update visualizer
+    updateCtrlVis(pad.axes,_gps.buttons);
+  } else {
+    if(_lastPadId){
+      _lastPadId='';
+      document.getElementById('gp-name').textContent='None';
+      document.getElementById('gp-type').textContent='—';
+    }
+  }
+  requestAnimationFrame(syncGP);
+})();
+
+// Fake gamepad object Unity sees — always Xbox 360
+const fGP={
+  id:'Xbox 360 Controller (XInput STANDARD GAMEPAD)',index:0,connected:true,mapping:'standard',
+  get timestamp(){return performance.now();},
+  get axes(){return[..._gps.axes];},
+  get buttons(){return _gps.buttons.map(b=>({pressed:b.pressed,touched:b.touched,value:b.value}));}
+};
+navigator.getGamepads=()=>{
+  const r=_rGP();
+  // If a real pad exists let Unity see our remapped fake; otherwise also fake for keep-alive
+  return r.some(p=>p&&p.connected)?[fGP,null,null,null]:[fGP,null,null,null];
+};
+
+// Fire connect event — wait until Unity input system is likely ready (4s)
+const fireGP=()=>{try{window.dispatchEvent(new GamepadEvent('gamepadconnected',{gamepad:fGP}));}catch(e){}};
+setTimeout(fireGP,4000);
+window.addEventListener('gamepadconnected',()=>setTimeout(fireGP,500));
+
+// Controller visualizer
+(()=>{
+  const grid=document.getElementById('cbtn-grid');
+  BTN_LABELS.forEach((lbl,i)=>{
+    const d=document.createElement('div');
+    d.className='cbtn'; d.id='cbtn-'+i; d.textContent=lbl;
+    grid.appendChild(d);
+  });
+})();
+
+function updateCtrlVis(axes,btns){
+  // Sticks
+  const lr=document.getElementById('sd-l'), rr=document.getElementById('sd-r');
+  const ax=axes||[0,0,0,0];
+  const mapS=(x,y)=>`translate(calc(-50% + ${(x||0)*18}px), calc(-50% + ${(y||0)*18}px))`;
+  lr.style.transform=mapS(ax[0],ax[1]);
+  rr.style.transform=mapS(ax[2],ax[3]);
+  // Buttons
+  btns.forEach((b,i)=>{
+    const el=document.getElementById('cbtn-'+i);
+    if(el) el.classList.toggle('pressed',!!b.pressed);
+  });
+}
+
+// Remap UI
+function renderRemapRows(){
+  const cont=document.getElementById('remap-rows');
+  cont.innerHTML='';
+  BTN_LABELS.forEach((lbl,xboxIdx)=>{
+    const row=document.createElement('div'); row.className='ctrl-map-row';
+    const l=document.createElement('span'); l.className='ctrl-map-lbl'; l.textContent='Xbox '+lbl;
+    const sel=document.createElement('select'); sel.className='ctrl-map-sel';
+    for(let i=0;i<17;i++){
+      const o=document.createElement('option'); o.value=i;
+      o.textContent='Phys '+i+(BTN_LABELS[i]?' ('+BTN_LABELS[i]+')':'');
+      if(C.remap[xboxIdx]===i) o.selected=true;
+      sel.appendChild(o);
+    }
+    sel.onchange=()=>{C.remap[xboxIdx]=+sel.value;save();mlog(`Remap: Xbox ${lbl} → Phys ${sel.value}`,'info');};
+    row.appendChild(l); row.appendChild(sel); cont.appendChild(row);
+  });
+}
+function resetRemap(){
+  C.remap=[...DEF.remap]; save(); renderRemapRows(); mlog('Remap reset to default','ok');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CUTSCENE PLAYER
+// ═══════════════════════════════════════════════════════════
+const CMAP={
+  Prologue:'StreamingAssets/Prologue.mp4',Intro:'StreamingAssets/Intro.mp4',
+  FinalA:'StreamingAssets/FinalA.mp4',FinalB:'StreamingAssets/FinalB.mp4',
+  FinalC:'StreamingAssets/FinalC.mp4',FinalD:'StreamingAssets/FinalD.mp4',
+  FinalE:'StreamingAssets/FinalE.mp4',Blacksmith:'StreamingAssets/Blacksmith.mp4',
+  CharmSlugKiss:'StreamingAssets/CharmSlugKiss.mp4',Fountain:'StreamingAssets/Fountain.mp4',
+  MaskShatter:'StreamingAssets/MaskShatter.mp4',MrMushroom:'StreamingAssets/MrMushroom.mp4',
+  Nailsmith:'StreamingAssets/Nailsmith.mp4',NailsmithPaint:'StreamingAssets/NailsmithPaint.mp4',
+  StagTunnelRun:'StreamingAssets/StagTunnelRun.mp4',Telescope:'StreamingAssets/Telescope.mp4',
+};
+let csState='idle';
+
+hkv.addEventListener('ended',()=>{
+  hkv.style.display='none'; hkv.removeAttribute('src'); hkv.load();
+  csState='done'; setTimeout(doSkipAll,80);
+});
+hkv.addEventListener('error',()=>{hkv.style.display='none';csState='idle';doSkipAll();});
+
+function csPlay(name){
+  if(!CMAP[name]||csState==='playing') return;
+  csState='playing';
+  // Pre-check availability before committing to play — jsDelivr 403s on large videos
+  fetch(CMAP[name],{method:'HEAD'}).then(r=>{
+    if(!r.ok){
+      mlog(`Cutscene ${name} unavailable (${r.status}) — skipping`,'warn');
+      csState='idle'; doSkipAll(); return;
+    }
+    hkv.src=CMAP[name]; hkv.style.display='block'; hkv.currentTime=0;
+    hkv.muted=false;
+    hkv.play().catch(()=>{csState='done';doSkipAll();});
+  }).catch(()=>{
+    mlog(`Cutscene ${name} fetch failed — skipping`,'warn');
+    csState='idle'; doSkipAll();
+  });
+}
+
+function doSkipAll(){
+  const keys=[{key:'Escape',code:'Escape',keyCode:27},{key:'Return',code:'Enter',keyCode:13},
+              {key:' ',code:'Space',keyCode:32},{key:'z',code:'KeyZ',keyCode:90}];
+  keys.forEach(k=>{
+    const o={...k,which:k.keyCode,bubbles:true,cancelable:true};
+    cv.dispatchEvent(new KeyboardEvent('keydown',o));
+    cv.dispatchEvent(new KeyboardEvent('keyup',o));
+  });
+  const r=cv.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
+  ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t=>
+    cv.dispatchEvent(new MouseEvent(t,{clientX:cx,clientY:cy,bubbles:true,cancelable:true})));
+  const saved=[..._gps.buttons];
+  _gps.buttons=Array.from({length:17},()=>({pressed:true,touched:true,value:1}));
+  setTimeout(()=>{_gps.buttons=saved;},250); fireGP();
+  setTimeout(()=>{csState='idle';},500);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INDEXEDDB CACHE
+// ═══════════════════════════════════════════════════════════
+const CDB='hk_cache_v4', CST='files';
+const GAME_FILES=[
+  ...Array.from({length:45},(_,i)=>`Build/hktruffled.data.part${i+1}`),
+  'Build/hktruffled.wasm.part1','Build/hktruffled.wasm.part2',
+  'Build/hktruffled.framework.js','Build/hktruffled.loader.js',
+  ...Object.values(CMAP),
+];
+
+let _cdb=null;
+const openCDB=()=>{
+  if(_cdb) return Promise.resolve(_cdb);
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(CDB,1);
+    r.onerror=()=>rej(r.error);
+    r.onsuccess=()=>{_cdb=r.result;res(_cdb);};
+    r.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains(CST))db.createObjectStore(CST,{keyPath:'path'});};
+  });
+};
+const getCached=async p=>{const db=await openCDB();return new Promise((res,rej)=>{const r=db.transaction(CST,'readonly').objectStore(CST).get(p);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error);});};
+const putCached=async(p,buf)=>{const db=await openCDB();return new Promise((res,rej)=>{const tx=db.transaction(CST,'readwrite');tx.objectStore(CST).put({path:p,buf,ts:Date.now()});tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});};
+
+async function autoCacheZipFiles() {
+  const archives = [
+    "https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/HK_Assets.zip",
+    "https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight/HK_Resources.zip"
+  ];
+  
+  const pill = document.getElementById('pill');
+  const prog = document.getElementById('cprog');
+  const lbl = document.getElementById('cbar-lbl');
+  
+  pill.textContent = '↓ unzipping to disk…';
+  pill.className = 'caching';
+
+  try {
+    for (const url of archives) {
+      lbl.textContent = `Downloading ${url.split('/').pop()}...`;
+      
+      const response = await fetch(url);
+      const arrayBuffer = await response.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+      
+      const fileNames = Object.keys(zip.files);
+      let processed = 0;
+
+      for (const name of fileNames) {
+        if (zip.files[name].dir) continue;
+
+        // 1. Check if we already have this specific file in IndexedDB
+        const exists = await getCached(name);
+        if (!exists) {
+          // 2. Extract from ZIP
+          const buf = await zip.files[name].async("arraybuffer");
+          // 3. Store in your existing IndexedDB system
+          await putCached(name, buf);
+        }
+
+        processed++;
+        // Update UI
+        const p = Math.round((processed / fileNames.length) * 100);
+        prog.style.width = p + '%';
+        lbl.textContent = `Storing ${name}... (${p}%)`;
+      }
+    }
+
+    pill.textContent = '● fully cached';
+    pill.className = 'cached';
+    lbl.textContent = 'All assets extracted to IndexedDB';
+    
+    // Launch the game now that everything is in IndexedDB
+    launchUnity();
+
+  } catch (e) {
+    console.error(e);
+    lbl.textContent = "Caching failed: " + e.message;
+  }
+}
+
+async function clearCache(){
+  try{
+    const db=await openCDB();
+    await new Promise((res,rej)=>{const tx=db.transaction(CST,'readwrite');tx.objectStore(CST).clear();tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
+    mlog('Cache cleared','ok');
+    document.getElementById('cbar-lbl').textContent='Cache cleared';
+    document.getElementById('cc-count').textContent='0';
+    document.getElementById('cc-state').textContent='None';
+    document.getElementById('cbar-pct').textContent='0%';
+    document.getElementById('cprog').style.width='0%';
+    document.getElementById('pill').textContent='○ not cached';
+    document.getElementById('pill').className='';
+  }catch(e){mlog('clear failed: '+e.message,'err');}
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FETCH PIPELINE
+// ═══════════════════════════════════════════════════════════
+const TOTAL_MB=912.81; let _lb=0, _te=0;
+const setP=p=>{const v=Math.min(100,Math.round(p));document.getElementById('ls-fill').style.width=v+'%';document.getElementById('ls-pct').textContent=v+'%';};
+const setSub=m=>document.getElementById('ls-sub').textContent=m;
+
+async function fetchWithCache(path){
+  const cached=await getCached(path);
+  if(cached?.buf){_lb+=cached.buf.byteLength;setP(_lb/(_te||1)*100);return cached.buf;}
+  const resp=await fetch(path);
+  if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${path}`);
+  const reader=resp.body.getReader(); const chunks=[];
+  while(true){const{done,value}=await reader.read();if(done)break;_lb+=value.length;chunks.push(value);setP(_lb/(_te||TOTAL_MB*1048576)*100);setSub(`${(_lb/1048576).toFixed(1)} / ${TOTAL_MB} MB`);}
+  const buf=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
+  let off=0; for(const c of chunks){buf.set(c,off);off+=c.length;}
+  putCached(path,buf.buffer).catch(()=>{});
+  return buf.buffer;
+}
+
+// Parallel part fetcher — returns a single joined ArrayBuffer.
+// Wasm is passed as ArrayBuffer directly to avoid blob MIME-type streaming errors.
+// JS blobs are created by the caller with the correct MIME type.
+async function fetchPartsParallel(base,from,to){
+  const paths=Array.from({length:to-from+1},(_,i)=>`${base}.part${from+i}`);
+  const q=[...paths.map((p,i)=>({p,i}))]; const bufs=new Array(paths.length);
+  await Promise.all(Array.from({length:4},async()=>{while(q.length){const{p,i}=q.shift();bufs[i]=await fetchWithCache(p);}}));
+  const total=bufs.reduce((a,b)=>a+b.byteLength,0);
+  const out=new Uint8Array(total); let off=0;
+  for(const b of bufs){out.set(new Uint8Array(b),off);off+=b.byteLength;}
+  return out.buffer;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MULTI-SLOT SAVE SYSTEM
+// ═══════════════════════════════════════════════════════════
+const SAVE_SK='hk_saves_v1';
+let _slots=[], _activeSlot=0;
+
+function loadSlots(){
+  try{const s=localStorage.getItem(SAVE_SK);if(s){const d=JSON.parse(s);_slots=d.slots||[];_activeSlot=d.active||0;}}catch(e){}
+  if(!_slots.length) _slots=[{name:'Slot 1',ts:null,data:null}];
+}
+function persistSlots(){try{localStorage.setItem(SAVE_SK,JSON.stringify({slots:_slots,active:_activeSlot}));}catch(e){mlog('Slot save failed: '+e.message,'err');}}
+
+function renderSlotList(){
+  const cont=document.getElementById('slot-list');
+  cont.innerHTML='';
+  _slots.forEach((sl,i)=>{
+    const row=document.createElement('div'); row.className='slot';
+    const nm=document.createElement('span'); nm.className='slot-name'+(i===_activeSlot?' active':'');
+    nm.textContent=(i===_activeSlot?'▶ ':'')+sl.name+(sl.ts?' ('+new Date(sl.ts).toLocaleDateString()+')':'');
+    const load=document.createElement('button'); load.className='slot-btn'; load.textContent='Load';
+    load.onclick=()=>{_activeSlot=i;persistSlots();renderSlotList();mlog('Active slot: '+sl.name,'ok');};
+    const del=document.createElement('button'); del.className='slot-btn bad'; del.textContent='Del';
+    del.onclick=()=>{
+      if(_slots.length<=1){mlog('Cannot delete last slot','warn');return;}
+      _slots.splice(i,1); if(_activeSlot>=_slots.length) _activeSlot=_slots.length-1;
+      persistSlots(); renderSlotList(); mlog('Slot deleted','ok');
+    };
+    row.appendChild(nm); row.appendChild(load); row.appendChild(del); cont.appendChild(row);
+  });
+}
+
+function createSlot(){
+  if(_slots.length>=8){mlog('Max 8 slots','warn');return;}
+  const inp=document.getElementById('slot-name-inp');
+  const name=inp.value.trim()||`Slot ${_slots.length+1}`;
+  _slots.push({name,ts:null,data:null}); _activeSlot=_slots.length-1;
+  persistSlots(); renderSlotList(); inp.value='';
+  mlog('Created slot: '+name,'ok');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SAVE / RESTORE
+// ═══════════════════════════════════════════════════════════
+async function doDownloadSave(){
+  mlog('Scanning save…','hi');
+  try{
+    const dbs=await indexedDB.databases();
+    if(!dbs.some(d=>d.name==='/idbfs')){mlog('No save found — play first','err');return;}
+    const req=indexedDB.open('/idbfs');
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      const tx=db.transaction('FILE_DATA','readonly'), st=tx.objectStore('FILE_DATA');
+      const vr=st.getAll(), kr=st.getAllKeys();
+      vr.onsuccess=()=>kr.onsuccess=()=>{
+        const data=kr.result.map((key,i)=>{
+          const v=vr.result[i]; let c=v.contents;
+          if(c instanceof Int8Array){const o={};for(let j=0;j<c.length;j++)o[j]=c[j];c=o;}
+          return{key,value:{timestamp:v.timestamp,mode:v.mode,contents:c}};
+        });
+        // Also store into active slot
+        _slots[_activeSlot].data=data; _slots[_activeSlot].ts=Date.now();
+        persistSlots(); renderSlotList();
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+        a.download='hk-save.json'; a.click(); mlog('Save downloaded + stored in active slot','ok');
+      };
+    };
+    req.onerror=()=>mlog('Could not open save DB','err');
+  }catch(e){mlog('Error: '+e.message,'err');}
+}
+
+async function fetchAndSaveHK(){
+  const url=document.getElementById('save-url').value.trim();
+  if(!url){mlog('Paste a URL first','warn');return;}
+  try{
+    const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([await res.text()],{type:'application/json'}));
+    a.download='hk-save.json'; a.click(); mlog('Save fetched','ok');
+  }catch(e){mlog('Fetch failed: '+e.message,'err');}
+}
+
+let _saveData=null;
+const dz=document.getElementById('dz'), fi=document.getElementById('fi');
+dz.onclick=()=>fi.click();
+fi.onchange=()=>{if(fi.files[0])loadSF(fi.files[0]);};
+dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag');};
+dz.ondragleave=()=>dz.classList.remove('drag');
+dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');if(e.dataTransfer.files[0])loadSF(e.dataTransfer.files[0]);};
+
+function loadSF(file){
+  const r=new FileReader();
+  r.onload=e=>{try{rxSave(JSON.parse(e.target.result),file.name);}catch(err){mlog('Bad file: '+err.message,'err');}};
+  r.readAsText(file);
+}
+function rxSave(data,name){
+  _saveData=data;
+  const n=Array.isArray(data)?data.length:Object.keys(data).length;
+  document.getElementById('dz-lbl').textContent=`✓ ${name} (${n} entries)`;
+  dz.classList.add('has-file');
+  const b=document.getElementById('inj-btn'); b.disabled=false;
+  mlog('Save ready: '+name,'ok');
+}
+
+async function doInjectSave(){
+  if(!_saveData){mlog('No save loaded','err');return;}
+  mlog('Injecting…','hi');
+
+  // Store into active slot
+  _slots[_activeSlot].data=_saveData; _slots[_activeSlot].ts=Date.now();
+  persistSlots(); renderSlotList();
+
+  if(Array.isArray(_saveData)){
+    const req=indexedDB.open('/idbfs');
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
+        let hash=null;
+        for(const k of ev.target.result){const p=k.split('/');if(p.length>=3){hash=p[2];break;}}
+        const tx=db.transaction('FILE_DATA','readwrite'), st=tx.objectStore('FILE_DATA');
+        st.clear(); let w=0;
+        _saveData.forEach(entry=>{
+          let key=entry.key;
+          if(hash){const p=key.split('/');if(p.length>=3){p[2]=hash;key=p.join('/');}}
+          let c=entry.value.contents;
+          if(c&&typeof c==='object'&&!(c instanceof Int8Array)){
+            const idx=Object.keys(c).map(Number).sort((a,b)=>a-b);
+            const arr=new Int8Array(idx.length); idx.forEach(i=>arr[i]=c[i]); c=arr;
+          }
+          st.put({timestamp:new Date(entry.value.timestamp),mode:entry.value.mode,contents:c},key); w++;
+        });
+        tx.oncomplete=()=>{mlog(`Injected ${w} entries — reloading game…`,'ok');db.close();setTimeout(reloadGame,1500);};
+        tx.onerror=err=>mlog('Write error: '+err,'err');
+      };
+    };
+    req.onerror=()=>mlog('Could not open save DB','err');
+    return;
+  }
+
+  let ok=0; const keys=Object.keys(_saveData);
+  for(const sk of keys){
+    const sl=sk.indexOf('/'), dbN=sk.substring(0,sl), stN=sk.substring(sl+1);
+    try{
+      const db=await openOrCreate(dbN,stN);
+      await new Promise((res,rej)=>{
+        const tx=db.transaction([stN],'readwrite'), st=tx.objectStore(stN); st.clear();
+        _saveData[sk].forEach(rec=>{const r={...rec};if(Array.isArray(r.contents))r.contents=new Uint8Array(r.contents);st.put(r);});
+        tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+      }); db.close(); ok++;
+    }catch(e){mlog(`Failed: ${sk} — ${e.message}`,'err');}
+  }
+  mlog(`${ok}/${keys.length} stores injected`,ok===keys.length?'ok':'warn');
+  if(ok>0){mlog('Reloading game…','hi');setTimeout(reloadGame,1500);}
+}
+
+function openOrCreate(dbName,storeName){
+  return new Promise((resolve,reject)=>{
+    const probe=indexedDB.open(dbName);
+    probe.onsuccess=()=>{
+      const db=probe.result, ver=db.version, has=db.objectStoreNames.contains(storeName); db.close();
+      const req=indexedDB.open(dbName,has?ver:ver+1);
+      if(!has) req.onupgradeneeded=e=>e.target.result.createObjectStore(storeName,{keyPath:'filename'});
+      req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
+    };
+    probe.onerror=()=>{
+      const req=indexedDB.open(dbName,1);
+      req.onupgradeneeded=e=>e.target.result.createObjectStore(storeName,{keyPath:'filename'});
+      req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
+    };
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GAME RELOAD  (re-runs Unity boot, no page reload)
+// ═══════════════════════════════════════════════════════════
+async function reloadGame(){
+  mlog('Reloading game instance…','hi');
+  if(unityInstance){
+    try{await unityInstance.Quit();}catch(e){mlog('Quit warn: '+e.message,'warn');}
+    unityInstance=null;
+    
+    // CRITICAL: Unity cannot attach to a Canvas that already had a WebGL context destroyed.
+    // We clone the dead canvas to create a fresh one, insert it, and update the global reference.
+    const oldCv = document.getElementById('unity-canvas');
+    const newCv = oldCv.cloneNode(true);
+    oldCv.parentNode.replaceChild(newCv, oldCv);
+    cv = newCv; 
+  }
+
+  // Build a fresh loading overlay
+  const ls=document.createElement('div');
+  ls.style.cssText='position:fixed;inset:0;background:#000;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px';
+  ls.innerHTML=`<div style="font-size:32px;color:#c8a96e;animation:breathe 2.4s ease-in-out infinite">⚔</div>
+    <h1 style="color:#c8a96e;font:600 20px Cinzel,serif;letter-spacing:6px">Hollow Knight</h1>
+    <div style="width:260px;height:1px;background:#181818"><div id="rld-fill" style="height:100%;background:#c8a96e;width:0%;transition:width .12s"></div></div>
+    <div id="rld-pct" style="color:#3a3a3a;font-size:9px;letter-spacing:2px">0%</div>
+    <div id="rld-sub" style="color:#222;font-size:9px;letter-spacing:1.5px">Reloading…</div>`;
+  document.body.appendChild(ls);
+
+  _lb=0; _te=TOTAL_MB*1048576;
+
+  try{
+    await launchUnity(
+      ls,
+      p=>{const v=Math.min(100,Math.round(p));const f=document.getElementById('rld-fill');const t=document.getElementById('rld-pct');if(f)f.style.width=v+'%';if(t)t.textContent=v+'%';},
+      m=>{const el=document.getElementById('rld-sub');if(el)el.textContent=m;},
+      ()=>{
+        mlog('Unity reloaded','ok');
+        mlog(`${C.preset||'custom'} | ${RES[Math.min(C.resolution,RES.length-1)].l} | ${C.memory}MB`,'hi');
+        setTimeout(fireGP,4000);
+      }
+    );
+  }catch(e){
+    mlog('Reload error: '+e.message,'err');
+    const sub=document.getElementById('rld-sub');if(sub)sub.textContent='Error — see log';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MOBILE
+// ═══════════════════════════════════════════════════════════
+if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){
+  const m=document.createElement('meta');
+  m.name='viewport'; m.content='width=device-width,height=device-height,initial-scale=1,user-scalable=no';
+  document.head.appendChild(m);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SESSION TIMER
+// ═══════════════════════════════════════════════════════════
+setTimeout(()=>{
+  const t=document.getElementById('session-toast');
+  t.style.display='block'; requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.style.display='none',400);},8000);
+},45*60*1000);
+
+// ═══════════════════════════════════════════════════════════
+//  CHROMEBOOK DETECT
+// ═══════════════════════════════════════════════════════════
+if(!/CrOS/i.test(navigator.userAgent)) document.getElementById('cb-note').style.display='none';
+
+// ═══════════════════════════════════════════════════════════
+//  AUDIOCONTEXT UNLOCK
+//  Chrome blocks AudioContext until a user gesture. We resume it
+//  on the first pointer/key event so game audio starts correctly.
+// ═══════════════════════════════════════════════════════════
+(()=>{
+  const resume=()=>{
+    if(window._actxUnlocked) return;
+    // Find any existing AudioContext Unity created and resume it
+    const ctx=window.AudioContext||window.webkitAudioContext;
+    if(ctx){
+      // Unity creates its own; hook the constructor to auto-resume
+      const _AC=ctx;
+      window[ctx===window.AudioContext?'AudioContext':'webkitAudioContext']=function(...a){
+        const c=new _AC(...a);
+        if(c.state==='suspended') c.resume().catch(()=>{});
+        return c;
+      };
+    }
+    window._actxUnlocked=true;
+  };
+  ['pointerdown','keydown','touchstart'].forEach(e=>window.addEventListener(e,resume,{once:true,capture:true}));
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  SYNCFS GUARD  — prevents concurrent IDBFS sync calls
+// ═══════════════════════════════════════════════════════════
+(()=>{
+  // Unity's FS.syncfs can fire multiple times; we throttle it
+  let _syncing=false;
+  const _origSync=window.FS?.syncfs;
+  if(_origSync){
+    window.FS.syncfs=function(populate,cb){
+      if(_syncing){if(cb)cb(null);return;}
+      _syncing=true;
+      _origSync.call(window.FS,populate,(err)=>{_syncing=false;if(cb)cb(err);});
+    };
+  }
+  // Re-apply after Unity loads since FS is set up inside the module
+  window._patchFSSync=()=>{
+    if(!window.FS||window.FS._patched) return;
+    window.FS._patched=true;
+    const orig=window.FS.syncfs;
+    window.FS.syncfs=function(populate,cb){
+      if(_syncing){if(cb)cb(null);return;}
+      _syncing=true;
+      orig.call(window.FS,populate,(err)=>{_syncing=false;if(cb)cb(err);});
+    };
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════
+// Shared Unity config builder — single source of truth
+function buildUnityConfig(dataUrl, wasmBuf, fwUrl){
+  return {
+    dataUrl,
+    frameworkUrl: fwUrl,
+    // instantiateWasm bypasses Unity's streaming compile which requires
+    // application/wasm MIME — blob URLs always serve as octet-stream
+    instantiateWasm(imports, onSuccess){
+      WebAssembly.instantiate(wasmBuf, imports)
+        .then(r=>onSuccess(r.instance, r.module))
+        .catch(e=>mlog('WASM instantiate error: '+e,'err'));
+      return {};
+    },
+    streamingAssetsUrl:'StreamingAssets',
+    companyName:'Team Cherry', productName:'Hollow Knight', productVersion:'1.0',
+    devicePixelRatio: C.dpiScale,
+    matchWebGLToCanvasSize: false,
+    memory: C.memory*1024*1024,
+    webglContextAttributes:{
+      antialias:C.antialias, alpha:false, depth:C.depth, stencil:C.stencil,
+      premultipliedAlpha:false, preserveDrawingBuffer:C.preserveDrawingBuffer,
+      desynchronized:C.desynchronized, powerPreference:C.powerPreference,
+      failIfMajorPerformanceCaveat:false,
+    }
+  };
+}
+
+(function() {
+    const originalFetch = window.fetch;
+    window.fetch = async function(url, options) {
+        // Get the filename (e.g., 'sharedassets0.assets')
+        const path = url.toString().split('/').pop();
+
+        try {
+            // Check if this file exists in your 'hk_cache_v4'
+            const cached = await getCached(path);
+            
+            if (cached && cached.buf) {
+                // If found on disk, serve it immediately!
+                // This is what fixes NKG projectiles and cutscenes.
+                return new Response(cached.buf, {
+                    headers: { 'Content-Type': 'application/octet-stream' }
+                });
+            }
+        } catch (e) {
+            console.warn("Cache lookup failed for:", path);
+        }
+
+        // If not in cache, let the browser download it normally
+        return originalFetch(url, options);
+    };
+})();
+
+// Shared Unity launch logic
+async function launchUnity(loadingEl, setProgress, setSubtitle, onReady){
+  setSubtitle('Loading files…');
+  const[dataBuf, wasmBuf, fwBuf, ldrBuf]=await Promise.all([
+    fetchPartsParallel('Build/hktruffled.data',1,45),
+    fetchPartsParallel('Build/hktruffled.wasm',1,2),
+    fetchWithCache('Build/hktruffled.framework.js'),
+    fetchWithCache('Build/hktruffled.loader.js'),
+  ]);
+
+  const dataUrl = URL.createObjectURL(new Blob([dataBuf]));
+  _blobUrls.add(dataUrl);
+
+  // --- SMART RE-ENTRY PATCH ---
+  // If unityFramework exists, the 10MB script is already mapped in memory.
+  // We pass an empty blob to satisfy the loader without crashing the JS context.
+  let fwUrl;
+  if (typeof window.unityFramework !== 'undefined') {
+      fwUrl = URL.createObjectURL(new Blob(["/* cached */"], {type:'application/javascript'}));
+  } else {
+      fwUrl = URL.createObjectURL(new Blob([fwBuf], {type:'application/javascript'}));
+  }
+  _blobUrls.add(fwUrl);
+
+  setSubtitle('Starting engine…'); setProgress(99);
+
+  // Only inject the loader if it hasn't been executed yet
+  if (typeof window.createUnityInstance === 'undefined') {
+      const ldrUrl = URL.createObjectURL(new Blob([ldrBuf], {type:'application/javascript'}));
+      _blobUrls.add(ldrUrl);
+      const sc = document.createElement('script'); 
+      sc.src = ldrUrl; 
+      sc.dataset.hkLoader = '1';
+      await new Promise((resolve,reject)=>{sc.onload=resolve;sc.onerror=()=>reject(new Error('Loader script failed'));document.body.appendChild(sc);});
+  }
+
+  setProgress(100);
+  const inst = await createUnityInstance(cv, buildUnityConfig(dataUrl, wasmBuf, fwUrl));
+  unityInstance = inst;
+  window._patchFSSync?.();
+
+  loadingEl.style.transition='opacity .5s'; loadingEl.style.opacity='0';
+  setTimeout(()=>loadingEl.remove(),600);
+
+  applyRes();
+  onReady();
+
+  setTimeout(()=>{_blobUrls.forEach(u=>URL.revokeObjectURL(u));_blobUrls.clear();},8*60*1000);
+}
+
+(async()=>{
+  load(); loadSlots(); syncUI();
+
+  cv.style.cssText='width:100vw;height:100vh;image-rendering:pixelated';
+  const idx=Math.min(C.resolution,RES.length-1);
+  cv.width=Math.round(window.innerWidth*RES[idx].v*(C.dpiScale||1));
+  cv.height=Math.round(window.innerHeight*RES[idx].v*(C.dpiScale||1));
+
+  await openCDB();
+  _te=TOTAL_MB*1048576;
+
+  const lsEl=document.getElementById('ls');
+  try{
+    await launchUnity(
+      lsEl,
+      p=>{const v=Math.min(100,Math.round(p));document.getElementById('ls-fill').style.width=v+'%';document.getElementById('ls-pct').textContent=v+'%';},
+      m=>document.getElementById('ls-sub').textContent=m,
+      ()=>{
+        mlog('Unity ready','ok');
+        mlog(`${C.preset||'custom'} | ${RES[idx].l} | ${C.memory}MB`,'hi');
+        setTimeout(fireGP,4000);
+        autoCacheFiles().catch(e=>mlog('Cache: '+e.message,'warn'));
+      }
+    );
+  }catch(e){
+    mlog('Boot error: '+e.message,'err');
+    document.getElementById('ls-sub').textContent='Error — see log';
+  }
+})();
+// --- UNIFIED KEYBOARD SHARING ---
+(function shareInput() {
+    ["keydown", "keyup", "keypress"].forEach(event => {
+        window.addEventListener(event, (e) => {
+            // Check if the user is currently focused on the manager's console input
+            const isTyping = document.activeElement && 
+                            (document.activeElement.id === 'con-inp' || 
+                             document.activeElement.tagName === 'INPUT');
+
+            if (isTyping) {
+                // 'stopImmediatePropagation' kills the event before Unity's listeners can see it
+                e.stopImmediatePropagation();
+            }
+        }, true); // The 'true' flag ensures we catch the key BEFORE Unity does
+    });
+})();
+</script>
+</body>
+</html>
