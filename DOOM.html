@@ -44,13 +44,16 @@
       border-radius: 3px;
     }
     #fullscreen-btn:hover { background: #333; }
+    #canvas-wrap {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
     canvas {
       display: block;
       border: 0;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
     }
   </style>
 </head>
@@ -61,7 +64,9 @@
     <div id="progress"></div>
   </div>
 
-  <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="canvas-wrap">
+    <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  </div>
   <button id="fullscreen-btn" onclick="Module.requestFullScreen(false,false)">Fullscreen</button>
 
   <script>
