@@ -29,7 +29,11 @@
     #progress { font-size: 12px; color: #555; }
     #fullscreen-btn {
       display: none;
-      margin-top: 10px;
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
       background: #222;
       border: 1px solid #444;
       color: #fff;
@@ -43,6 +47,10 @@
     canvas {
       display: block;
       border: 0;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
     }
   </style>
 </head>
@@ -51,10 +59,10 @@
   <div id="status-wrap">
     <div id="status">Starting MS-DOS...</div>
     <div id="progress"></div>
-    <button id="fullscreen-btn" onclick="Module.requestFullScreen(false,false)">Fullscreen</button>
   </div>
 
   <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <button id="fullscreen-btn" onclick="Module.requestFullScreen(false,false)">Fullscreen</button>
 
   <script>
     var statusEl   = document.getElementById('status');
@@ -91,7 +99,7 @@
         );
         if (left === 0) {
           document.getElementById('status-wrap').style.display = 'none';
-          document.getElementById('fullscreen-btn').style.display = 'inline-block';
+          document.getElementById('fullscreen-btn').style.display = 'block';
         }
       },
       SDL_numSimultaneouslyQueuedBuffers: 1,
