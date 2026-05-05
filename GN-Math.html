@@ -318,6 +318,16 @@ body.performance-mode .swiper-button-next:hover,
 body.performance-mode .btn-icon:hover,
 body.performance-mode .game-card:hover { transform: none !important; }
 body.classic-theme main { max-width: none !important; }
+html, body {
+    scrollbar-width: thin;
+    scrollbar-color: var(--bg-card-hover) var(--bg-darkest);
+}
+html::-webkit-scrollbar { width: 10px; height: 10px; background: var(--bg-darkest); }
+html::-webkit-scrollbar-thumb { background: var(--bg-card-hover); border-radius: 5px; border: 2px solid var(--bg-darkest); }
+html::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+body::-webkit-scrollbar { width: 10px; height: 10px; background: var(--bg-darkest); }
+body::-webkit-scrollbar-thumb { background: var(--bg-card-hover); border-radius: 5px; border: 2px solid var(--bg-darkest); }
+body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 </style>
 </head>
 <body>
