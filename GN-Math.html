@@ -108,7 +108,7 @@
     font-weight: normal;
     font-style: normal;
 }
-* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--bg-card-hover) var(--bg-darkest); }
+* { box-sizing: border-box; }
 body {
     background-color: var(--bg-dark);
     color: var(--text-main);
@@ -116,9 +116,11 @@ body {
     margin: 0; padding: 0; overflow-x: hidden;
     min-height: 100vh; display: flex; flex-direction: column;
 }
-::-webkit-scrollbar { width: 10px; height: 10px; background: var(--bg-darkest); }
-::-webkit-scrollbar-thumb { background: var(--bg-card-hover); border-radius: 5px; border: 2px solid var(--bg-darkest); }
-::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+/* GAS FIX: use hardcoded colors + explicit html/body targets; CSS vars unreliable on ::-webkit-scrollbar in GAS iframe */
+html, body { scrollbar-width: thin; scrollbar-color: #334155 #020617; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { width: 10px; height: 10px; background: #020617; }
+html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; border: 2px solid #020617; }
+html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover { background: #64748b; }
 header {
     background: var(--gradient-primary);
     position: sticky; top: 0; z-index: 1000;
@@ -318,16 +320,6 @@ body.performance-mode .swiper-button-next:hover,
 body.performance-mode .btn-icon:hover,
 body.performance-mode .game-card:hover { transform: none !important; }
 body.classic-theme main { max-width: none !important; }
-html, body {
-    scrollbar-width: thin;
-    scrollbar-color: var(--bg-card-hover) var(--bg-darkest);
-}
-html::-webkit-scrollbar { width: 10px; height: 10px; background: var(--bg-darkest); }
-html::-webkit-scrollbar-thumb { background: var(--bg-card-hover); border-radius: 5px; border: 2px solid var(--bg-darkest); }
-html::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
-body::-webkit-scrollbar { width: 10px; height: 10px; background: var(--bg-darkest); }
-body::-webkit-scrollbar-thumb { background: var(--bg-card-hover); border-radius: 5px; border: 2px solid var(--bg-darkest); }
-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 </style>
 </head>
 <body>
@@ -1622,6 +1614,13 @@ function waitForSwiper() {
         setTimeout(waitForSwiper, 50);
     }
 }
+// GAS FIX: inject scrollbar styles via JS — GAS sometimes strips or sandboxes CSS that targets ::-webkit-scrollbar
+(function() {
+    const s = document.createElement('style');
+    s.textContent = 'html,body{scrollbar-width:thin;scrollbar-color:#334155 #020617}html::-webkit-scrollbar,body::-webkit-scrollbar{width:10px;height:10px;background:#020617}html::-webkit-scrollbar-thumb,body::-webkit-scrollbar-thumb{background:#334155;border-radius:5px;border:2px solid #020617}html::-webkit-scrollbar-thumb:hover,body::-webkit-scrollbar-thumb:hover{background:#64748b}';
+    document.head.appendChild(s);
+})();
+
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', waitForSwiper);
 else waitForSwiper();
 </script>
