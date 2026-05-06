@@ -320,9 +320,22 @@ body.performance-mode .swiper-button-next:hover,
 body.performance-mode .btn-icon:hover,
 body.performance-mode .game-card:hover { transform: none !important; }
 body.classic-theme main { max-width: none !important; }
+/* GAS SCROLLBAR FIX: body scrollbar is invisible in GAS iframe; use a controlled div instead */
+html, body { overflow: hidden !important; height: 100% !important; }
+#scroll-root {
+    height: 100vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #334155 #020617;
+}
+#scroll-root::-webkit-scrollbar { width: 10px; background: #020617; }
+#scroll-root::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; border: 2px solid #020617; }
+#scroll-root::-webkit-scrollbar-thumb:hover { background: #64748b; }
 </style>
 </head>
 <body>
+<div id="scroll-root">
 <header>
 <div class="header-upper">
 <div class="logo" onclick="location.reload()">gn-math</div>
@@ -423,6 +436,7 @@ All Games
 </div>
 </div>
 </footer>
+</div><!-- #scroll-root -->
 <div id="zoneViewer">
 <div class="zone-header">
 <div class="zone-title">
@@ -953,6 +967,7 @@ async function openGame(id) {
     document.querySelector('header').style.display = 'none';
     document.querySelector('main').style.display = 'none';
     document.querySelector('footer').style.display = 'none';
+    var sr = document.getElementById('scroll-root'); if (sr) sr.style.overflow = 'hidden';
 
     // GAS FIX: history.pushState wrapped in try/catch at top of file; still works on real domains
     try { const url = new URL(window.location); url.searchParams.set('id', id); history.pushState(null, '', url.toString()); } catch(e) {}
@@ -993,6 +1008,7 @@ function closeZone() {
     document.querySelector('header').style.display = 'block';
     document.querySelector('main').style.display = 'block';
     document.querySelector('footer').style.display = 'block';
+    var sr = document.getElementById('scroll-root'); if (sr) sr.style.overflow = '';
     try { const url = new URL(window.location); url.searchParams.delete('id'); history.pushState(null, '', url.toString()); } catch(e) {}
 }
 
