@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+<head>
+<base href="https://cdn.jsdelivr.net/gh/slqntdevss/Kindergarten3Port@main/">
+
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Kindergarten3Port</title>
+
+<style>
+html,body{
+margin:0;
+padding:0;
+overflow:hidden;
+height:100%;
+width:100%;
+}
+
+#unity-container{
+width:100%;
+height:100%;
+position:fixed;
+top:0;
+left:0;
+}
+</style>
+</head>
+
+<body>
+
+<div id="loading-text" style="color:black;font-family:cursive;font-size:48px;text-align:center;margin-top:20px;">
+LOADING...
+</div>
+
+<div id="unity-container" hidden>
+
+<canvas id="unity-canvas" tabindex="-1"></canvas>
+
+<div id="unity-loading-bar">
+<div id="unity-progress-bar-empty">
+<div id="unity-progress-bar-full"></div>
+</div>
+</div>
+
+<div id="unity-warning"></div>
+
+</div>
+
+<script>
+
+var container=document.querySelector("#unity-container");
+var canvas=document.querySelector("#unity-canvas");
+var loadingBar=document.querySelector("#unity-loading-bar");
+var progressBarFull=document.querySelector("#unity-progress-bar-full");
+
+function unityShowBanner(msg,type){}
+
+function mergeFiles(parts){
+
+return new Promise((resolve,reject)=>{
+
+let buffers=[];
+
+function fetchPart(i){
+
+if(i>=parts.length){
+
+let blob=new Blob(buffers);
+resolve(URL.createObjectURL(blob));
+return;
+
+}
+
+fetch(parts[i])
+.then(r=>r.arrayBuffer())
+.then(data=>{
+buffers.push(data);
+fetchPart(i+1);
+})
+.catch(reject);
+
+}
+
+fetchPart(0);
+
+});
+
+}
+
+function getParts(file,start,end){
+
+let arr=[];
+
+for(let i=start;i<=end;i++)
+arr.push(file+".part"+i);
+
+return arr;
+
+}
+
+Promise.all([
+
+mergeFiles(getParts("Build/Kindergarten3Port.data",1,2)),
+
+mergeFiles(getParts("Build/Kindergarten3Port.wasm",1,3))
+
+]).then(([dataUrl,wasmUrl])=>{
+
+container.hidden=false;
+
+var buildUrl="Build";
+var loaderUrl=buildUrl+"/Kindergarten3Port.loader.js";
+
+var config={
+
+dataUrl:dataUrl,
+frameworkUrl:buildUrl+"/Kindergarten3Port.framework.js",
+codeUrl:wasmUrl,
+streamingAssetsUrl:"StreamingAssets",
+
+companyName:"Con Man Games",
+productName:"Kindergarten3",
+productVersion:"0.01",
+
+showBanner:unityShowBanner
+
+};
+
+function resizeCanvas(){
+
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+
+canvas.style.width=window.innerWidth+"px";
+canvas.style.height=window.innerHeight+"px";
+
+}
+
+resizeCanvas();
+window.addEventListener("resize",resizeCanvas);
+
+loadingBar.style.display="block";
+
+var script=document.createElement("script");
+
+script.src=loaderUrl;
+
+script.onload=function(){
+
+createUnityInstance(canvas,config,function(progress){
+
+progressBarFull.style.width=(progress*100)+"%";
+
+})
+
+.then(function(){
+
+loadingBar.style.display="none";
+document.querySelector("#loading-text").remove();
+
+})
+
+.catch(function(e){
+
+console.error(e);
+alert(e);
+
+});
+
+};
+
+document.body.appendChild(script);
+
+});
+
+</script>
+
+</body>
+</html>

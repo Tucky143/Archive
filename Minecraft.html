@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>EaglerHub</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;600;700;800;900&display=swap"
+    rel="stylesheet">
+  <style>
+    /* ══════════════════════════════════════════
+   THEME VARIABLES
+══════════════════════════════════════════ */
+    :root {
+      --bg: #0d1117;
+      --sidebar-bg: #0a0d12;
+      --panel-bg: #111820;
+      --surface: rgba(255, 255, 255, 0.05);
+      --surface-hover: rgba(255, 255, 255, 0.09);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e8edf5;
+      --muted: #6b7a96;
+      --accent: #3ddc84;
+      --accent-dark: #28a35e;
+      --accent-glow: rgba(61, 220, 132, 0.3);
+      --danger: #ef4444;
+      --sky-top: #0d2137;
+      --sky-mid: #1a3d5c;
+      --sky-bot: #2d6a4f;
+      --bg-url: url('https://wallpapercave.com/wp/wp15094254.webp');
+    }
+
+    body.nether {
+      --accent: #ff6b35;
+      --accent-dark: #cc4a1a;
+      --accent-glow: rgba(255, 107, 53, 0.35);
+      --sky-top: #1a0800;
+      --sky-mid: #4a1000;
+      --sky-bot: #7a2000;
+      --bg-url: url('https://images.prismic.io/svep/5dbca8e6-cdf9-4520-8a97-ac28afcd62fc_minecraft-nether_1920x1080_work_15.jpg?auto=compress,format');
+    }
+
+    body.end {
+      --accent: #c084fc;
+      --accent-dark: #9333ea;
+      --accent-glow: rgba(192, 132, 252, 0.35);
+      --sky-top: #050008;
+      --sky-mid: #0f0024;
+      --sky-bot: #1a0040;
+      --bg-url: url('https://i.redd.it/i-think-the-end-dimension-should-have-some-stars-in-the-sky-v0-39xwehrr8s3f1.png?width=1920&format=png&auto=webp&s=66ead56a8c6fafc843ac323f96661f82c87f62df');
+    }
+
+    /* ══════════════════════════════════════════
+   RESET & BASE
+══════════════════════════════════════════ */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      transition: background 0.4s;
+    }
+
+    /* ══════════════════════════════════════════
+   LAYOUT — sidebar + content
+══════════════════════════════════════════ */
+    .sidebar {
+      width: 72px;
+      min-height: 100vh;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 4px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .sidebar-logo {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      color: var(--accent);
+      text-align: center;
+      line-height: 1.6;
+      padding: 4px 8px 16px;
+      border-bottom: 1px solid var(--border);
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    .nav-btn {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 22px;
+      transition: all 0.18s;
+      position: relative;
+    }
+
+    .nav-btn span.nav-label {
+      font-size: 8px;
+      font-weight: 800;
+      font-family: 'Nunito', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      line-height: 1;
+    }
+
+    .nav-btn:hover {
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .nav-btn.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .nav-btn.active .nav-label {
+      color: #000;
+    }
+
+    .sidebar-spacer {
+      flex: 1;
+    }
+
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Pane visibility */
+    .pane {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .pane.active {
+      display: flex;
+    }
+
+    /* ══════════════════════════════════════════
+   HOME PANE — Minecraft launcher style
+══════════════════════════════════════════ */
+    #homePane {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .home-bg {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-url) center center / cover no-repeat;
+      transition: background-image 0.5s ease;
+    }
+
+    .home-bg-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom,
+          rgba(0, 0, 0, 0.25) 0%,
+          rgba(0, 0, 0, 0.1) 40%,
+          rgba(0, 0, 0, 0.7) 75%,
+          rgba(0, 0, 0, 0.92) 100%);
+    }
+
+    /* News ticker area — top bar */
+    .home-topbar {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+    }
+
+    .home-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 14px;
+      color: #fff;
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9), 0 0 30px var(--accent-glow);
+    }
+
+    .home-subtitle {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    /* Spacer pushes bottom bar down */
+    .home-spacer {
+      flex: 1;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── bottom launch bar ── */
+    .home-launchbar {
+      position: relative;
+      z-index: 2;
+      padding: 20px 24px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.95), transparent);
+    }
+
+    /* Instance selector */
+    .instance-selector {
+      flex: 1;
+      max-width: 280px;
+    }
+
+    .instance-select-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .instance-dropdown-wrap {
+      position: relative;
+    }
+
+    .instance-dropdown-wrap::after {
+      content: '▾';
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+      font-size: 14px;
+    }
+
+    #instanceSelect {
+      width: 100%;
+      padding: 13px 36px 13px 14px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      appearance: none;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    #instanceSelect:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    #instanceSelect option {
+      background: #111820;
+    }
+
+    /* PLAY button */
+    .play-btn {
+      padding: 14px 48px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      border: none;
+      border-radius: 10px;
+      color: #000;
+      font-family: 'Nunito', sans-serif;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      cursor: pointer;
+      box-shadow: 0 4px 24px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      transition: all 0.18s;
+      position: relative;
+      overflow: hidden;
+      text-transform: uppercase;
+    }
+
+    .play-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.4s;
+    }
+
+    .play-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .play-btn:hover::before {
+      transform: translateX(100%);
+    }
+
+    .play-btn:active {
+      transform: translateY(0);
+    }
+
+    .play-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* "No instances" state */
+    .no-instance-msg {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 24px;
+      text-align: center;
+      gap: 12px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .no-instance-msg p {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    /* Loading overlay on home */
+    .home-loading {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      background: rgba(0, 0, 0, 0.8);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+    }
+
+    .home-loading.show {
+      display: flex;
+    }
+
+    .portal-wrap {
+      width: 90px;
+      height: 90px;
+      position: relative;
+    }
+
+    .ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      animation: spin 2.8s linear infinite;
+    }
+
+    .ring.r1 {
+      border: 5px solid rgba(167, 139, 250, 0.2);
+    }
+
+    .ring.r2 {
+      border: 4px dashed rgba(214, 77, 255, 0.25);
+      animation-duration: 3.6s;
+    }
+
+    .ring.r3 {
+      border: 3px solid rgba(139, 92, 246, 0.15);
+      animation-duration: 4.4s;
+    }
+
+    .portal-core {
+      position: absolute;
+      inset: 28%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, rgba(214, 77, 255, 1), rgba(139, 92, 246, 0.8) 40%, rgba(88, 28, 135, 0.3) 70%);
+      animation: corePulse 1.6s ease-in-out infinite;
+      box-shadow: 0 0 30px rgba(167, 139, 250, 0.6);
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes corePulse {
+
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(0.9);
+      }
+    }
+
+    .progress-label {
+      font-size: 15px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .progress-bar-wrap {
+      width: 320px;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), rgba(255, 255, 255, 0.8));
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      transition: width .15s linear;
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    @keyframes shimmer {
+      0% {
+        background-position: 200% 0;
+      }
+
+      100% {
+        background-position: -200% 0;
+      }
+    }
+
+    .progress-pct {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .cancel-btn {
+      padding: 10px 28px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 10px;
+      color: var(--danger);
+      font-family: 'Nunito', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .cancel-btn:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    /* ══════════════════════════════════════════
+   INSTANCES PANE
+══════════════════════════════════════════ */
+    #instancesPane {
+      background: var(--panel-bg);
+    }
+
+    .pane-header {
+      padding: 24px 28px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .pane-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 12px;
+      color: var(--accent);
+    }
+
+    .pane-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-top: 5px;
+    }
+
+    .add-btn {
+      padding: 10px 20px;
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      color: #000;
+      font-family: 'Nunito', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.18s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .add-btn:hover {
+      opacity: 0.85;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+
+    .instances-body {
+      padding: 24px 28px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* Instance grid */
+    .instance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+
+    .instance-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 18px 16px;
+      cursor: pointer;
+      transition: all 0.18s;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .instance-card:hover {
+      border-color: var(--accent);
+      background: var(--surface-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent);
+    }
+
+    .instance-card.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent), 0 8px 24px var(--accent-glow);
+    }
+
+    .instance-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 4px;
+      box-shadow: 0 4px 12px var(--accent-glow);
+    }
+
+    .instance-name {
+      font-size: 15px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .instance-version {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .instance-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .inst-btn {
+      flex: 1;
+      padding: 7px 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Nunito', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .inst-btn:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    .inst-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border-color: var(--danger);
+    }
+
+    .inst-btn.play-small {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+
+    .inst-btn.play-small:hover {
+      opacity: 0.85;
+    }
+
+    .empty-instances {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+
+    .empty-instances .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .empty-instances p {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .empty-instances small {
+      font-size: 13px;
+    }
+
+    /* ══════════════════════════════════════════
+   SETTINGS PANE
+══════════════════════════════════════════ */
+    #settingsPane {
+      background: var(--panel-bg);
+    }
+
+    .settings-body {
+      padding: 24px 28px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .setting-section {}
+
+    .setting-section-title {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .theme-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .theme-card {
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface);
+    }
+
+    .theme-card:hover {
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .theme-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--accent-glow);
+    }
+
+    .theme-preview {
+      height: 60px;
+      width: 100%;
+      background-size: cover;
+      background-position: center;
+    }
+
+    .theme-label {
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .stat-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 10px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--accent);
+    }
+
+    .stat-lbl {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+
+    .danger-zone {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .danger-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: rgba(239, 68, 68, 0.07);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 10px;
+    }
+
+    .danger-info p {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .danger-info small {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .danger-action {
+      padding: 8px 16px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 8px;
+      color: var(--danger);
+      font-family: 'Nunito', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .danger-action:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    .tos-link {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .tos-link a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .tos-link a:hover {
+      text-decoration: underline;
+    }
+
+    /* warn box */
+    .warn-box {
+      margin: 12px 28px 0;
+      padding: 10px 14px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 10px;
+      font-size: 12px;
+      color: #fca5a5;
+      line-height: 1.5;
+      display: none;
+      flex-shrink: 0;
+    }
+
+    .warn-box.show {
+      display: block;
+    }
+
+    /* ══════════════════════════════════════════
+   MODAL — New / Edit Instance
+══════════════════════════════════════════ */
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(6px);
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .modal-bg.open {
+      display: flex;
+    }
+
+    .modal {
+      background: #0e1520;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      width: 480px;
+      max-width: 100%;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 22px 24px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .modal-close:hover {
+      color: var(--text);
+      background: var(--surface-hover);
+    }
+
+    .modal-body {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .field-label {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .field-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+    }
+
+    .field-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .field-input option {
+      background: #111820;
+    }
+
+    .field-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+
+    .icon-picker {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .icon-opt {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .icon-opt:hover {
+      border-color: var(--accent);
+    }
+
+    .icon-opt.selected {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .modal-footer {
+      padding: 0 24px 24px;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn-primary {
+      padding: 11px 28px;
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      color: #000;
+      font-family: 'Nunito', sans-serif;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.85;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      padding: 11px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-family: 'Nunito', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    /* ══════════════════════════════════════════
+   SCROLLBAR
+══════════════════════════════════════════ */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ════════════════════════════════
+     SIDEBAR
+════════════════════════════════ -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">EH</div>
+
+    <button class="nav-btn active" id="navHome" onclick="switchPane('home')" title="Home">
+    <span>⛏</span>
+    <span class="nav-label">Home</span>
+  </button>
+    <button class="nav-btn" id="navInstances" onclick="switchPane('instances')" title="Instances">
+    <span>📦</span>
+    <span class="nav-label">Instances</span>
+  </button>
+
+    <div class="sidebar-spacer"></div>
+
+    <button class="nav-btn" id="navSettings" onclick="switchPane('settings')" title="Settings">
+    <span>⚙️</span>
+    <span class="nav-label">Settings</span>
+  </button>
+  </nav>
+
+  <!-- ════════════════════════════════
+     CONTENT
+════════════════════════════════ -->
+  <div class="content">
+
+    <!-- Warn box shown at top of content when storage was corrupt -->
+    <div class="warn-box" id="warnBox"></div>
+
+    <!-- ── HOME PANE ── -->
+    <div class="pane active" id="homePane">
+      <div class="home-bg" id="homeBg"></div>
+      <div class="home-bg-overlay"></div>
+
+      <div class="home-topbar">
+        <div>
+          <div class="home-title">EaglerHub</div>
+          <div class="home-subtitle">Browser Minecraft Launcher</div>
+        </div>
+      </div>
+
+      <div class="home-spacer"></div>
+
+      <!-- Launch bar (shown when instances exist) -->
+      <div class="home-launchbar" id="launchBar">
+        <div class="instance-selector">
+          <div class="instance-select-label">Selected Instance</div>
+          <div class="instance-dropdown-wrap">
+            <select id="instanceSelect"></select>
+          </div>
+        </div>
+        <button class="play-btn" id="playBtn" onclick="launchSelected()">▶ PLAY</button>
+      </div>
+
+      <!-- Shown when no instances exist -->
+      <div class="no-instance-msg hidden" id="noInstanceMsg">
+        <p>No instances yet — add one in the Instances tab!</p>
+        <button class="play-btn" style="opacity:0.5;cursor:default" disabled>▶ PLAY</button>
+      </div>
+
+      <!-- Loading overlay -->
+      <div class="home-loading" id="homeLoading">
+        <div class="portal-wrap">
+          <div class="ring r1"></div>
+          <div class="ring r2"></div>
+          <div class="ring r3"></div>
+          <div class="portal-core"></div>
+        </div>
+        <div class="progress-label" id="progressLabel">Launching…</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-pct" id="progressPct">0%</div>
+        <button class="cancel-btn" onclick="cancelLoading()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- ── INSTANCES PANE ── -->
+    <div class="pane" id="instancesPane">
+      <div class="pane-header">
+        <div>
+          <div class="pane-title">Instances</div>
+          <div class="pane-subtitle">Manage your Eaglercraft versions</div>
+        </div>
+        <button class="add-btn" onclick="openNewModal()">＋ New Instance</button>
+      </div>
+      <div class="instances-body">
+        <div class="instance-grid" id="instanceGrid"></div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS PANE ── -->
+    <div class="pane" id="settingsPane">
+      <div class="pane-header">
+        <div>
+          <div class="pane-title">Settings</div>
+          <div class="pane-subtitle">Preferences & data</div>
+        </div>
+      </div>
+      <div class="settings-body">
+
+        <div class="setting-section">
+          <div class="setting-section-title">Theme</div>
+          <div class="theme-grid">
+            <div class="theme-card" data-theme="overworld" onclick="setTheme('overworld')">
+              <div class="theme-preview" style="background-image:url('https://wallpapercave.com/wp/wp15094254.webp')">
+              </div>
+              <div class="theme-label">🌿 Overworld</div>
+            </div>
+            <div class="theme-card" data-theme="nether" onclick="setTheme('nether')">
+              <div class="theme-preview"
+                style="background-image:url('https://images.prismic.io/svep/5dbca8e6-cdf9-4520-8a97-ac28afcd62fc_minecraft-nether_1920x1080_work_15.jpg?auto=compress,format')">
+              </div>
+              <div class="theme-label">🔥 Nether</div>
+            </div>
+            <div class="theme-card" data-theme="end" onclick="setTheme('end')">
+              <div class="theme-preview"
+                style="background-image:url('https://i.redd.it/i-think-the-end-dimension-should-have-some-stars-in-the-sky-v0-39xwehrr8s3f1.png?width=1920&format=png&auto=webp&s=66ead56a8c6fafc843ac323f96661f82c87f62df')">
+              </div>
+              <div class="theme-label">🌌 The End</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-section">
+          <div class="setting-section-title">Stats</div>
+          <div class="stat-cards">
+            <div class="stat-card">
+              <div class="stat-val" id="statInstances">0</div>
+              <div class="stat-lbl">Instances</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val" id="statLaunches">0</div>
+              <div class="stat-lbl">Launched</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val" id="statCustom">0</div>
+              <div class="stat-lbl">Custom URLs</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-section">
+          <div class="setting-section-title">Data</div>
+          <div class="danger-zone">
+            <div class="danger-row">
+              <div class="danger-info">
+                <p>Reset all instances</p>
+                <small>Restore the default pre-built instances</small>
+              </div>
+              <button class="danger-action" onclick="resetInstances()">Reset</button>
+            </div>
+            <div class="danger-row">
+              <div class="danger-info">
+                <p>Clear all data</p>
+                <small>Wipe instances, stats, and settings</small>
+              </div>
+              <button class="danger-action" onclick="clearAllData()">Clear</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tos-link">
+          By using EaglerHub you agree to the
+          <a href="https://docs.google.com/document/d/1HnnMcZ47NqW93IyGo28E1_FZy53riz261rysgy8p7K0/edit?usp=sharing"
+            target="_blank" rel="noopener">Terms &amp; Conditions</a>.
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- end .content -->
+
+  <!-- ════════════════════════════════
+     NEW / EDIT INSTANCE MODAL
+════════════════════════════════ -->
+  <div class="modal-bg" id="instanceModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="modalTitle">New Instance</span>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <div>
+          <div class="field-label">Instance Name</div>
+          <input class="field-input" type="text" id="modalName" placeholder="My Eaglercraft" maxlength="40">
+        </div>
+
+        <div>
+          <div class="field-label">Icon</div>
+          <div class="icon-picker" id="iconPicker">
+            <!-- filled by JS -->
+          </div>
+        </div>
+
+        <div>
+          <div class="field-label">Version / URL</div>
+          <select class="field-input" id="modalVersionSelect" onchange="handleVersionSelect()">
+          <option value="">— Choose a preset —</option>
+          <!-- filled by JS -->
+        </select>
+          <p class="field-hint">Or paste a custom URL below (overrides dropdown)</p>
+          <input class="field-input" type="text" id="modalCustomUrl"
+               placeholder="https://raw.githubusercontent.com/…/file.html"
+               style="margin-top:8px">
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" id="modalSaveBtn" onclick="saveInstance()">Add Instance</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════ -->
+  <script>
+    // ─────────────────────────────────────────────
+// Safe localStorage
+// ─────────────────────────────────────────────
+const _warns = [];
+function safeGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    const v = JSON.parse(raw);
+    if (Array.isArray(fallback) && !Array.isArray(v)) throw 0;
+    return v;
+  } catch(e) {
+    _warns.push(`Data for "${key}" was corrupt and has been reset.`);
+    try { localStorage.removeItem(key); } catch(_) {}
+    return fallback;
+  }
+}
+function safeSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
+}
+function safeGetStr(key, fallback) {
+  try { return localStorage.getItem(key) ?? fallback; } catch(e) { return fallback; }
+}
+function safeSetStr(key, val) {
+  try { localStorage.setItem(key, val); } catch(e) {}
+}
+
+// ─────────────────────────────────────────────
+// Preset version catalogue
+// ─────────────────────────────────────────────
+const VERSION_PRESETS = [
+  { group:'Eaglercraft', label:'1.12.2 Stable (U3)',       url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/1.12.2.html' },
+  { group:'Eaglercraft', label:'1.8',          url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/1.8.html' },
+  { group:'Eaglercraft', label:'1.5',          url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/1.5.html' },
+  { group:'Astra',        label:'1.8',    url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/astra18.html' },
+  { group:'Astra',        label:'1.12',    url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/astra112.html' },
+  { group:'Tuff',        label:'1.1UT13 WIP',  url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/Tuff_WASM_13.html' },
+  { group:'Tuff',        label:'1.1UT12 Stable',url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/Tuff_WASM_12.html' },
+  { group:'Tuff',        label:'1.1UT10 Shaders',url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/Tuff_WASM_10.html' },
+  { group:'Tuff',        label:'1.1UT13 Wispcraft',url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/wispcraft-Tuff_Client_Offline_WASM.html' },
+  { group:'EaglyMC',     label:'1.20.1',url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/Eaglymc_offline_u7_WASM.html' },
+  { group:'Starlike',    label:'1.18 (WASM)',  url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/Starlike_Client_Offline_WASM.html' },
+  { group:'EaglerForge', label:'1.8',          url:'https://client.eaglercraft.win/eagler-files/modded/1.8/EaglerForge/index.html' },
+  { group:'EaglerForge', label:'1.12.2',       url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/forge-1.12.2.html' },
+  { group:'Shadow Client',label:'1.8',         url:'https://client.eaglercraft.win/eagler-files/1.8/Shadow_Client_en_US.html' },
+  { group:'Pixel Client', label:'1.12.2',      url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/PixelClient 1.12.2 WASM.html' },
+  { group:'Pixel Client', label:'1.8',         url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/PixelClient 1.8.8 WASM.html' },
+  { group:'ResentClient', label:'1.8',         url:'https://raw.githubusercontent.com/Tucky143/Archive/main/Eaglercraft/ResentClient_1.8_PROD_WASM.html' },
+];
+
+const DEFAULT_INSTANCES = [
+  { id:'default-1', name:'Eaglercraft 1.12.2', icon:'⛏', url: VERSION_PRESETS.find(v=>v.group==='Eaglercraft'&&v.label==='1.12.2 Stable (U3)').url, custom:false },
+  { id:'default-2', name:'Eaglercraft 1.8',    icon:'🗡', url: VERSION_PRESETS.find(v=>v.group==='Eaglercraft'&&v.label==='1.8').url,    custom:false },
+  { id:'default-3', name:'Tuff 1.1UT12',       icon:'🧱', url: VERSION_PRESETS.find(v=>v.group==='Tuff'&&v.label==='1.1UT12 Stable').url, custom:false},
+  { id:'default-4', name:'Pixel Client 1.12.2',       icon:'👾', url: VERSION_PRESETS.find(v=>v.group==='Pixel Client'&&v.label==='1.12.2').url,           custom:false }
+];
+
+const ICONS = ['⛏','🗡','🏹','🧱','🔮','🌿','🔥','🌌','💎','🛡','🪄','🎮'];
+const BG_URLS = {
+  overworld: "url('https://wallpapercave.com/wp/wp15094254.webp')",
+  nether:    "url('https://images.prismic.io/svep/5dbca8e6-cdf9-4520-8a97-ac28afcd62fc_minecraft-nether_1920x1080_work_15.jpg?auto=compress,format')",
+  end:       "url('https://i.redd.it/i-think-the-end-dimension-should-have-some-stars-in-the-sky-v0-39xwehrr8s3f1.png?width=1920&format=png&auto=webp&s=66ead56a8c6fafc843ac323f96661f82c87f62df')",
+};
+
+// ─────────────────────────────────────────────
+// App State
+// ─────────────────────────────────────────────
+let instances   = safeGet('eh-instances', null);
+if (!instances || !Array.isArray(instances) || instances.length === 0) {
+  instances = JSON.parse(JSON.stringify(DEFAULT_INSTANCES));
+}
+let launchCount  = parseInt(safeGetStr('eh-launches','0'), 10) || 0;
+let selectedInst = safeGetStr('eh-selected', instances[0]?.id ?? '');
+let currentTheme = safeGetStr('eh-theme', 'overworld');
+let editingId    = null; // for modal
+let selectedIcon = ICONS[0];
+
+let cancelRequested = false;
+let abortController = null;
+let openTab = null;
+
+// ─────────────────────────────────────────────
+// Error safety net
+// ─────────────────────────────────────────────
+window.addEventListener('unhandledrejection', e => {
+  hideLoading();
+  const msg = e.reason?.message ?? String(e.reason);
+  if (!msg.includes('Cancel') && !msg.includes('AbortError')) alert('Error: ' + msg);
+  e.preventDefault();
+});
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if (_warns.length) {
+    const b = document.getElementById('warnBox');
+    if (b) { b.textContent = '⚠ ' + _warns.join(' '); b.classList.add('show'); }
+  }
+  applyTheme(currentTheme);
+  buildVersionDropdown();
+  buildIconPicker();
+  renderAll();
+});
+
+function renderAll() {
+  renderInstanceDropdown();
+  renderInstanceGrid();
+  updateStats();
+}
+
+// ─────────────────────────────────────────────
+// Pane switching
+// ─────────────────────────────────────────────
+function switchPane(name) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(name + 'Pane').classList.add('active');
+  document.getElementById('nav' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+}
+
+// ─────────────────────────────────────────────
+// Theme
+// ─────────────────────────────────────────────
+function setTheme(theme) {
+  currentTheme = theme;
+  safeSetStr('eh-theme', theme);
+  applyTheme(theme);
+}
+function applyTheme(theme) {
+  document.body.className = theme === 'overworld' ? '' : theme;
+  document.getElementById('homeBg').style.backgroundImage = BG_URLS[theme] ?? BG_URLS.overworld;
+  document.querySelectorAll('.theme-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.theme === theme);
+  });
+}
+
+// ─────────────────────────────────────────────
+// Instance dropdown (home pane)
+// ─────────────────────────────────────────────
+function renderInstanceDropdown() {
+  const sel = document.getElementById('instanceSelect');
+  const bar = document.getElementById('launchBar');
+  const noMsg = document.getElementById('noInstanceMsg');
+  sel.innerHTML = '';
+
+  if (!instances.length) {
+    bar.style.display = 'none';
+    noMsg.style.display = 'flex';
+    return;
+  }
+  bar.style.display = 'flex';
+  noMsg.style.display = 'none';
+
+  instances.forEach(inst => {
+    const opt = document.createElement('option');
+    opt.value = inst.id;
+    opt.textContent = inst.icon + '  ' + inst.name;
+    sel.appendChild(opt);
+  });
+
+  // Restore last selected, fall back to first
+  const valid = instances.find(i => i.id === selectedInst);
+  sel.value = valid ? selectedInst : instances[0].id;
+  selectedInst = sel.value;
+
+  sel.onchange = () => {
+    selectedInst = sel.value;
+    safeSetStr('eh-selected', selectedInst);
+  };
+}
+
+// ─────────────────────────────────────────────
+// Instance grid (instances pane)
+// ─────────────────────────────────────────────
+function renderInstanceGrid() {
+  const grid = document.getElementById('instanceGrid');
+  grid.innerHTML = '';
+
+  if (!instances.length) {
+    grid.innerHTML = `<div class="empty-instances">
+      <div class="empty-icon">📦</div>
+      <p>No instances yet!</p>
+      <small>Click "+ New Instance" to add a version to play.</small>
+    </div>`;
+    return;
+  }
+
+  instances.forEach(inst => {
+    const card = document.createElement('div');
+    card.className = 'instance-card' + (inst.id === selectedInst ? ' selected' : '');
+    card.innerHTML = `
+      <div class="instance-icon">${escH(inst.icon)}</div>
+      <div class="instance-name" title="${escH(inst.name)}">${escH(inst.name)}</div>
+      <div class="instance-version">${escH(getVersionLabel(inst.url))}</div>
+      <div class="instance-actions">
+        <button class="inst-btn play-small" onclick="quickLaunch('${inst.id}')">▶ Play</button>
+        <button class="inst-btn" onclick="editInstance('${inst.id}')">Edit</button>
+        <button class="inst-btn danger" onclick="deleteInstance('${inst.id}')">✕</button>
+      </div>`;
+    card.addEventListener('click', e => {
+      // Select this instance (unless they clicked a button)
+      if (e.target.tagName !== 'BUTTON') selectInstance(inst.id);
+    });
+    grid.appendChild(card);
+  });
+}
+
+function getVersionLabel(url) {
+  const preset = VERSION_PRESETS.find(p => p.url === url);
+  return preset ? preset.group + ' ' + preset.label : 'Custom URL';
+}
+
+function selectInstance(id) {
+  selectedInst = id;
+  safeSetStr('eh-selected', id);
+  renderInstanceDropdown();
+  renderInstanceGrid();
+}
+
+function deleteInstance(id) {
+  if (!confirm('Delete this instance?')) return;
+  instances = instances.filter(i => i.id !== id);
+  safeSet('eh-instances', instances);
+  if (selectedInst === id) selectedInst = instances[0]?.id ?? '';
+  safeSetStr('eh-selected', selectedInst);
+  renderAll();
+}
+
+function quickLaunch(id) {
+  selectInstance(id);
+  launchSelected();
+  switchPane('home');
+}
+
+// ─────────────────────────────────────────────
+// Stats
+// ─────────────────────────────────────────────
+function updateStats() {
+  const customCount = instances.filter(i => i.custom).length;
+  const s = id => document.getElementById(id);
+  if (s('statInstances')) s('statInstances').textContent = instances.length;
+  if (s('statLaunches'))  s('statLaunches').textContent  = launchCount;
+  if (s('statCustom'))    s('statCustom').textContent    = customCount;
+}
+
+// ─────────────────────────────────────────────
+// Modal — New / Edit Instance
+// ─────────────────────────────────────────────
+function buildVersionDropdown() {
+  const sel = document.getElementById('modalVersionSelect');
+  const groups = [...new Set(VERSION_PRESETS.map(p => p.group))];
+  groups.forEach(g => {
+    const og = document.createElement('optgroup');
+    og.label = g;
+    VERSION_PRESETS.filter(p => p.group === g).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.url;
+      opt.textContent = p.label;
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
+  });
+}
+
+function buildIconPicker() {
+  const picker = document.getElementById('iconPicker');
+  picker.innerHTML = '';
+  ICONS.forEach(ic => {
+    const btn = document.createElement('button');
+    btn.className = 'icon-opt' + (ic === selectedIcon ? ' selected' : '');
+    btn.textContent = ic;
+    btn.type = 'button';
+    btn.onclick = () => {
+      selectedIcon = ic;
+      document.querySelectorAll('.icon-opt').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    picker.appendChild(btn);
+  });
+}
+
+function handleVersionSelect() {
+  const sel = document.getElementById('modalVersionSelect');
+  if (sel.value) document.getElementById('modalCustomUrl').value = '';
+}
+
+function openNewModal() {
+  editingId = null;
+  selectedIcon = ICONS[0];
+  document.getElementById('modalTitle').textContent = 'New Instance';
+  document.getElementById('modalSaveBtn').textContent = 'Add Instance';
+  document.getElementById('modalName').value = '';
+  document.getElementById('modalVersionSelect').value = '';
+  document.getElementById('modalCustomUrl').value = '';
+  buildIconPicker();
+  document.getElementById('instanceModal').classList.add('open');
+  document.getElementById('modalName').focus();
+}
+
+function editInstance(id) {
+  const inst = instances.find(i => i.id === id);
+  if (!inst) return;
+  editingId = id;
+  selectedIcon = inst.icon || ICONS[0];
+  document.getElementById('modalTitle').textContent = 'Edit Instance';
+  document.getElementById('modalSaveBtn').textContent = 'Save Changes';
+  document.getElementById('modalName').value = inst.name;
+  document.getElementById('modalCustomUrl').value = '';
+  buildIconPicker();
+
+  // Try to match preset
+  const preset = VERSION_PRESETS.find(p => p.url === inst.url);
+  if (preset) {
+    document.getElementById('modalVersionSelect').value = inst.url;
+  } else {
+    document.getElementById('modalVersionSelect').value = '';
+    document.getElementById('modalCustomUrl').value = inst.url;
+  }
+  document.getElementById('instanceModal').classList.add('open');
+}
+
+function saveInstance() {
+  const name = document.getElementById('modalName').value.trim();
+  const customUrl = document.getElementById('modalCustomUrl').value.trim();
+  const presetUrl = document.getElementById('modalVersionSelect').value;
+  const url = customUrl || presetUrl;
+
+  if (!name) { alert('Please enter an instance name.'); return; }
+  if (!url)  { alert('Please choose a version or enter a custom URL.'); return; }
+
+  const isCustom = !!customUrl;
+
+  if (editingId) {
+    const idx = instances.findIndex(i => i.id === editingId);
+    if (idx > -1) {
+      instances[idx] = { ...instances[idx], name, icon: selectedIcon, url, custom: isCustom };
+    }
+  } else {
+    instances.push({ id: 'inst-' + Date.now(), name, icon: selectedIcon, url, custom: isCustom });
+  }
+
+  safeSet('eh-instances', instances);
+  closeModal();
+  renderAll();
+}
+
+function closeModal() {
+  document.getElementById('instanceModal').classList.remove('open');
+  editingId = null;
+}
+
+// Close modal on backdrop click
+document.getElementById('instanceModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('instanceModal')) closeModal();
+});
+
+// ─────────────────────────────────────────────
+// Data management
+// ─────────────────────────────────────────────
+function resetInstances() {
+  if (!confirm('Reset instances to defaults? Your custom instances will be lost.')) return;
+  instances = JSON.parse(JSON.stringify(DEFAULT_INSTANCES));
+  safeSet('eh-instances', instances);
+  selectedInst = instances[0].id;
+  safeSetStr('eh-selected', selectedInst);
+  renderAll();
+}
+
+function clearAllData() {
+  if (!confirm('This will erase ALL data — instances, stats, and settings. Continue?')) return;
+  try { localStorage.clear(); } catch(e) {}
+  location.reload();
+}
+
+// ─────────────────────────────────────────────
+// Launching
+// ─────────────────────────────────────────────
+function launchSelected() {
+  const inst = instances.find(i => i.id === selectedInst);
+  if (!inst) { alert('No instance selected!'); return; }
+  loadUrl(inst.url, inst.name);
+}
+
+async function loadUrl(url, label) {
+  showLoading();
+  setProgress(0, 'Opening tab…');
+
+  const tab = window.open('about:blank', '_blank');
+  if (!tab) { alert('Popup blocked! Please allow popups for this site.'); hideLoading(); return; }
+
+  // Write loading UI into the tab
+  try {
+    tab.document.open();
+    tab.document.write(tabLoadingHtml(label));
+    tab.document.close();
+  } catch(e) {}
+
+  openTab = tab;
+  abortController = new AbortController();
+  const { signal } = abortController;
+
+  try {
+    setProgress(15, 'Fetching…');
+    let html = await fetchWithFallback(url, signal);
+    if (cancelRequested) throw new Error('Cancelled');
+
+    setProgress(80, 'Injecting…');
+    const base = url.replace(/\/[^/]*$/, '/');
+    const baseTag = `<base href="${base}">`;
+    html = /<head[^>]*>/i.test(html)
+      ? html.replace(/<head[^>]*>/i, m => m + baseTag)
+      : baseTag + html;
+
+    if (!safeWrite(tab, html)) {
+      const t2 = window.open('about:blank','_blank');
+      if (t2) { safeWrite(t2, html); try { tab.close(); } catch(e){} openTab = t2; }
+      else throw new Error('Could not write to tab (popup blocked?)');
+    }
+
+    setProgress(100, 'Done!');
+    launchCount++;
+    safeSetStr('eh-launches', launchCount);
+    updateStats();
+
+  } catch(err) {
+    if (err.name !== 'AbortError' && err.message !== 'Cancelled') {
+      try { tab.close(); } catch(e){}
+      alert('Failed to launch: ' + err.message);
+    }
+  } finally {
+    abortController = null; openTab = null;
+    hideLoading();
+  }
+}
+
+async function fetchWithFallback(url, signal) {
+  try {
+    const r = await fetch(url, { signal, cache: 'force-cache' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const t = await r.text();
+    if (t.trim().length < 20) throw new Error('Response too short — cache may be corrupt');
+    return t;
+  } catch(e) {
+    if (e.name === 'AbortError') throw e;
+    console.warn('Cache miss, retrying fresh:', e.message);
+    setProgress(10, 'Cache miss — fetching fresh copy…');
+  }
+  const r2 = await fetch(url, { signal, cache: 'no-store' });
+  if (!r2.ok) throw new Error('HTTP ' + r2.status);
+  const t2 = await r2.text();
+  if (t2.trim().length < 20) throw new Error('Server returned an empty response');
+  return t2;
+}
+
+function safeWrite(tab, html) {
+  try { tab.document.open(); tab.document.write(html); tab.document.close(); return true; }
+  catch(e) { return false; }
+}
+
+function showLoading() {
+  cancelRequested = false;
+  document.getElementById('homeLoading').classList.add('show');
+  setProgress(0, 'Launching…');
+}
+function hideLoading() {
+  document.getElementById('homeLoading').classList.remove('show');
+}
+function setProgress(pct, label) {
+  const c = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  const fill = document.getElementById('progressFill');
+  const pctEl = document.getElementById('progressPct');
+  const lblEl = document.getElementById('progressLabel');
+  if (fill)  fill.style.width  = c + '%';
+  if (pctEl) pctEl.textContent = c + '%';
+  if (label && lblEl) lblEl.textContent = label;
+  try {
+    if (openTab && !openTab.closed) {
+      const tf = openTab.document.getElementById('tab-fill');
+      const tp = openTab.document.getElementById('tab-pct');
+      if (tf) tf.style.width = c + '%';
+      if (tp) tp.textContent = c + '%';
+    }
+  } catch(e){}
+}
+function cancelLoading() {
+  cancelRequested = true;
+  if (abortController) abortController.abort();
+  try { if (openTab && !openTab.closed) openTab.close(); } catch(e){}
+  hideLoading();
+}
+
+// ─────────────────────────────────────────────
+// Tab loading HTML
+// ─────────────────────────────────────────────
+function tabLoadingHtml(title) {
+  const t = (title||'Loading').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${t}</title><style>
+    body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
+      background:#0a0015;color:#fff;font-family:'Segoe UI',Arial,sans-serif}
+    .w{width:400px;text-align:center}
+    h2{margin:0 0 20px;color:#e0e0ff;font-size:20px}
+    .p{width:90px;height:90px;position:relative;margin:0 auto 20px}
+    .r{position:absolute;inset:0;border-radius:50%;animation:spin 3s linear infinite}
+    .r1{border:6px solid rgba(167,139,250,.2)}
+    .r2{border:5px dashed rgba(214,77,255,.25);animation-duration:4s}
+    .r3{border:3px solid rgba(139,92,246,.15);animation-duration:5s}
+    .c{position:absolute;inset:24%;border-radius:50%;
+      background:radial-gradient(circle at 30% 30%,rgba(214,77,255,1),rgba(139,92,246,.8) 40%,rgba(88,28,135,.3) 70%);
+      box-shadow:0 0 30px rgba(167,139,250,.6)}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .bar{height:10px;background:rgba(255,255,255,.08);border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
+    .fill{height:100%;width:0%;background:linear-gradient(90deg,#a78bfa,#c084fc);transition:width .12s linear}
+    .pct{margin-top:10px;color:#c4b5fd;font-size:13px}
+    .note{margin-top:14px;color:#9ca3af;font-size:13px}
+  </style></head><body><div class="w">
+    <h2>${t}</h2>
+    <div class="p"><div class="r r1"></div><div class="r r2"></div><div class="r r3"></div><div class="c"></div></div>
+    <div class="bar"><div id="tab-fill" class="fill"></div></div>
+    <div class="pct" id="tab-pct">0%</div>
+    <div class="note">This tab will transform once loading is complete.</div>
+  </div></body></html>`;
+}
+
+// ─────────────────────────────────────────────
+// Utility
+// ─────────────────────────────────────────────
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+  </script>
+</body>
+
+</html>
