@@ -6,8 +6,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Fira+Code:wght@300;400;500&display=swap');
-
-:root {
+:root{
   --g:#c8a96e;--g2:#e8c98e;--g3:#a07840;
   --ink:#080808;--panel:#0b0b0b;--rim:#1e1e1e;--rim2:#282828;
   --muted:#3a3a3a;--dim:#222;--dim2:#444;
@@ -48,8 +47,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 /* PANEL */
 #panel{position:fixed;right:0;top:0;width:272px;height:100vh;background:var(--panel);border-left:1px solid var(--rim);z-index:100000;display:flex;flex-direction:column;will-change:transform;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
 #panel.open{transform:none}
-
-/* PANEL HEADER */
 #ph{padding:12px 12px 0;flex-shrink:0;border-bottom:1px solid var(--rim)}
 #ph-top{display:flex;align-items:center;gap:8px;padding-bottom:10px}
 #ph-top .phi{font-size:18px;color:var(--g)}
@@ -99,7 +96,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 .btn.gold:hover{color:var(--g);border-color:#c8a96e44}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
 
-/* INFO */
+/* INFO ROWS */
 .ir{display:flex;justify-content:space-between;padding:3px 0;font-size:8px;border-bottom:1px solid #0d0d0d}
 .ik{color:var(--dim2)}
 .iv{color:var(--muted);text-align:right;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -120,17 +117,17 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 .slot-meta{font-size:7px;color:var(--dim2);letter-spacing:.3px;margin-top:2px}
 .slot-actions{display:flex;gap:3px;flex-shrink:0}
 .sb{padding:3px 8px;background:#0d0d0d;border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:7px var(--ff);color:var(--dim2);transition:.12s;white-space:nowrap}
-.sb:hover{color:var(--g);border-color:#c8a96e33}
+.sb:hover,.sb.is-active{color:var(--g);border-color:#c8a96e33}
 .sb.bad:hover{color:var(--bad);border-color:#ef535033}
-.sb.is-active{color:var(--g);border-color:#c8a96e44}
 
 /* NEW SLOT ROW */
 #new-slot-row{display:flex;gap:4px;margin-top:6px}
-#slot-name-inp{flex:1;background:#070707;border:1px solid var(--rim);color:#666;padding:4px 7px;font:9px var(--ff);border-radius:var(--r);outline:none;min-width:0}
-#slot-name-inp:focus{border-color:#c8a96e33;color:#888}
-#slot-name-inp::placeholder{color:#1c1c1c}
-#slot-add-btn{padding:4px 10px;background:#0d0d0d;border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:8px var(--ff);color:var(--dim2);transition:.12px;flex-shrink:0}
-#slot-add-btn:hover{color:var(--g);border-color:#c8a96e33}
+#slot-name-inp,#save-url,#con-inp{background:#070707;border:1px solid var(--rim);color:#555;padding:4px 7px;font:9px var(--ff);border-radius:var(--r);outline:none}
+#slot-name-inp,#save-url{flex:1;min-width:0}
+#slot-name-inp:focus,#save-url:focus,#con-inp:focus{border-color:#c8a96e33;color:#888}
+#slot-name-inp::placeholder,#save-url::placeholder,#con-inp::placeholder{color:#1c1c1c}
+#slot-add-btn,#url-go,#con-send{padding:4px 10px;background:#0d0d0d;border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:8px var(--ff);color:var(--dim2);transition:.12s;flex-shrink:0}
+#slot-add-btn:hover,#url-go:hover,#con-send:hover{color:var(--g);border-color:#c8a96e33}
 
 /* DROP ZONE */
 #dz{border:1px dashed #1a1a1a;border-radius:var(--r);padding:14px 10px;text-align:center;cursor:pointer;transition:.2s;background:#050505}
@@ -148,16 +145,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 
 /* URL ROW */
 #url-row{display:flex;gap:4px}
-#save-url{flex:1;background:#070707;border:1px solid var(--rim);color:#555;padding:5px 7px;font:9px var(--ff);border-radius:var(--r);outline:none;min-width:0}
-#save-url:focus{border-color:#c8a96e22;color:#777}
-#save-url::placeholder{color:#1c1c1c}
-#url-go{padding:5px 10px;background:#0d0d0d;color:var(--muted);border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:9px var(--ff);transition:.12s;flex-shrink:0}
-#url-go:hover{color:var(--g);border-color:#c8a96e22}
+#save-url{padding:5px 7px}
 
 /* SOURCE BUTTONS */
 .src-btn{width:100%;padding:9px 10px;background:#0d0d0d;color:var(--muted);border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:9px var(--ff);text-align:left;transition:.15s;display:flex;flex-direction:column;gap:3px;margin-bottom:4px}
-.src-btn:hover{background:#111;border-color:#2a2a2a}
-.src-btn.active{border-color:#c8a96e55;background:#111}
+.src-btn:hover,.src-btn.active{background:#111;border-color:#2a2a2a}
+.src-btn.active{border-color:#c8a96e55}
 .src-name{font-size:9px;letter-spacing:.8px;font-family:var(--fc)}
 .src-btn.active .src-name{color:var(--g)}
 .src-url{font-size:7px;color:#2a2a2a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -200,11 +193,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 .ll{padding:1px 3px;white-space:pre-wrap;word-break:break-all;font-size:8px;line-height:1.5;border-bottom:1px solid #080808}
 .ll.ok{color:var(--ok)}.ll.err{color:var(--bad)}.ll.warn{color:var(--warn)}.ll.hi{color:var(--g)}.ll.info{color:var(--info)}.ll.log{color:#3a3a3a}.ll.debug{color:#2a2a2a}
 #con-row{display:flex;gap:4px;margin-top:5px}
-#con-inp{flex:1;background:#050505;border:1px solid var(--rim);color:#666;padding:4px 7px;font:8px var(--ff);border-radius:var(--r);outline:none}
-#con-inp:focus{border-color:#c8a96e22;color:#888}
-#con-inp::placeholder{color:#1a1a1a}
-#con-send{padding:4px 9px;background:#0d0d0d;border:1px solid var(--rim);border-radius:var(--r);cursor:pointer;font:8px var(--ff);color:var(--dim2);transition:.12s;flex-shrink:0}
-#con-send:hover{color:var(--g);border-color:#c8a96e22}
+#con-inp{flex:1;padding:4px 7px;font-size:8px}
+#con-send{padding:4px 9px;font-size:8px}
 
 /* TOAST */
 #session-toast{position:fixed;bottom:38px;left:10px;padding:5px 12px;background:rgba(0,0,0,.92);border:1px solid var(--warn);border-radius:var(--r);font-size:8px;color:var(--warn);z-index:9999;pointer-events:none;opacity:0;transition:opacity .4s;display:none}
@@ -421,8 +411,6 @@ const SOURCES = [
   { name:'Performant',     base:'https://cdn.jsdelivr.net/gh/kararh0916/hollow-knight@main' },
 ];
 
-// Raw GitHub fallback URLs for large streaming assets that jsDelivr may 403
-// These map relative asset paths to raw.githubusercontent.com equivalents
 const RAW_FALLBACKS = {
   'StreamingAssets/FinalE.mp4': 'https://raw.githubusercontent.com/Tucky143/Archive/main/Hollow%20Knight/StreamingAssets/FinalE.mp4',
 };
@@ -431,8 +419,6 @@ let _srcIdx = 0;
 try { _srcIdx = Math.max(0,Math.min(SOURCES.length-1,parseInt(localStorage.getItem('hk_src_idx')||'0',10)||0)); } catch(e){}
 const cdnBase = () => SOURCES[_srcIdx].base;
 const cdnUrl  = p  => cdnBase()+'/'+p;
-
-// Resolve a path to its best URL — raw fallback when available
 const resolveUrl = p => RAW_FALLBACKS[p] || cdnUrl(p);
 
 function switchSource(idx){
@@ -511,7 +497,7 @@ function updateSourceUI(){
 window.addEventListener('beforeunload',e=>{e.preventDefault();e.returnValue='';});
 
 // ═══════════════════════════════════════════════════════════════
-//  CONFIG  (same localStorage key — no data loss)
+//  CONFIG
 // ═══════════════════════════════════════════════════════════════
 const SK='hk_cfg_v6';
 const DEF={
@@ -542,21 +528,64 @@ const BTN_LABELS=['A','B','X','Y','LB','RB','SL','SR','↩','▶','LS','RS','↑
 
 // ═══════════════════════════════════════════════════════════════
 //  PRESETS
+//  NOTE: resolution/dpiScale in presets below "medium" use reduced values.
+//  "medium" and "high" do NOT lower resolution or dpiScale below the
+//  DEF baseline — high only raises visual quality settings.
 // ═══════════════════════════════════════════════════════════════
 const PRESETS={
-  potato: {resolution:0,dpiScale:.4,memory:64,antialias:false,depth:false,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
-  minimal:{resolution:1,dpiScale:.5,memory:128,antialias:false,depth:false,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
-  superlow:{resolution:2,dpiScale:.75,memory:128,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:1,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:false,particleBudget:256},
-  cbsafe: {resolution:3,dpiScale:1,memory:192,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:256},
-  low:    {resolution:3,dpiScale:.75,memory:192,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:true,shadowQuality:0,softShadows:false,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:256},
-  medium: {resolution:5,dpiScale:1,memory:256,antialias:false,depth:true,desynchronized:true,powerPreference:'high-performance',shadows:true,shadowQuality:1,softShadows:false,bloom:true,bloomIntensity:.3,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:2,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:512},
-  high:   {resolution:7,dpiScale:1,memory:384,antialias:false,depth:true,desynchronized:true,powerPreference:'high-performance',shadows:true,shadowQuality:2,softShadows:true,bloom:true,bloomIntensity:.4,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:3,anisotropicFiltering:true,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:1024},
+  potato: {resolution:0,dpiScale:.4, memory:64, antialias:false,depth:false,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true, textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true, particleBudget:64},
+  minimal:{resolution:1,dpiScale:.5, memory:128,antialias:false,depth:false,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true, textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true, particleBudget:64},
+  superlow:{resolution:2,dpiScale:.75,memory:128,antialias:false,depth:true, desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true, textureQuality:1,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:false,particleBudget:256},
+  cbsafe: {resolution:3,dpiScale:.85,memory:192,antialias:false,depth:true, desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:true, colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true, fpsCap:0,disableParticles:false,particleBudget:256},
+  low:    {resolution:3,dpiScale:.75,memory:192,antialias:false,depth:true, desynchronized:true,powerPreference:'default',shadows:true, shadowQuality:0,softShadows:false,bloom:false,vignette:true, colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true, fpsCap:0,disableParticles:false,particleBudget:256},
+  // medium and high: resolution/dpiScale stay at DEF values (5 / 1.0) — never lower
+  medium: {resolution:DEF.resolution,dpiScale:DEF.dpiScale,memory:256,antialias:false,depth:true, desynchronized:true,powerPreference:'high-performance',shadows:true, shadowQuality:1,softShadows:false,bloom:true, bloomIntensity:.3,vignette:true, colorGrading:true, motionBlur:false,disablePostFX:false,textureQuality:2,anisotropicFiltering:false,normalMaps:true, fpsCap:0,disableParticles:false,particleBudget:512},
+  high:   {resolution:DEF.resolution,dpiScale:DEF.dpiScale,memory:384,antialias:false,depth:true, desynchronized:true,powerPreference:'high-performance',shadows:true, shadowQuality:2,softShadows:true, bloom:true, bloomIntensity:.4,vignette:true, colorGrading:true, motionBlur:false,disablePostFX:false,textureQuality:3,anisotropicFiltering:true, normalMaps:true, fpsCap:0,disableParticles:false,particleBudget:1024},
 };
+
+// ═══════════════════════════════════════════════════════════════
+//  APPLY UNITY GRAPHICS SETTINGS
+//  Pushes quality/render settings to the live Unity instance via
+//  SendMessage after any preset change.
+// ═══════════════════════════════════════════════════════════════
+function applyUnityGraphics(){
+  if(!unityInstance) return;
+  const sm=(obj,fn,val)=>{try{unityInstance.SendMessage(obj,fn,String(val));}catch(e){mlog('SM warn: '+e.message,'debug');}};
+
+  // QualitySettings level (0=lowest … 5=ultra; map textureQuality 0-3 → level 0-5)
+  const ql=C.disablePostFX?0:Math.min(5,C.textureQuality*1+C.shadowQuality);
+  sm('QualitySettings','SetQualityLevel',ql);
+
+  // Texture resolution: 0=full,1=half,2=quarter — Unity uses inverse of our scale
+  const texRes=Math.max(0,3-C.textureQuality); // textureQuality 3→0, 2→1, 1→2, 0→3 capped at 2
+  sm('QualitySettings','masterTextureLimit',Math.min(texRes,2));
+
+  // Shadows
+  sm('QualitySettings','shadows',C.shadows?'2':'0');           // 0=off,1=hard,2=all
+  sm('QualitySettings','shadowDistance',C.shadowQuality===0?'20':C.shadowQuality===1?'60':'120');
+  sm('QualitySettings','softVegetation',C.softShadows?'true':'false');
+
+  // Post-processing: bloom, vignette, colour grading via custom receiver if present
+  sm('PostProcessingManager','SetBloom',   C.bloom&&!C.disablePostFX?'true':'false');
+  sm('PostProcessingManager','SetVignette',C.vignette&&!C.disablePostFX?'true':'false');
+  sm('PostProcessingManager','SetColorGrading',C.colorGrading&&!C.disablePostFX?'true':'false');
+
+  // Particles
+  sm('ParticleManager','SetEnabled',C.disableParticles?'false':'true');
+  sm('ParticleManager','SetBudget',String(C.particleBudget));
+
+  // vSync / frame cap
+  sm('QualitySettings','vSyncCount',C.fpsCap>0?'0':'1');
+  if(C.fpsCap>0) sm('Application','targetFrameRate',String(C.fpsCap));
+
+  mlog('Graphics pushed to Unity (ql='+ql+')','info');
+}
 
 function applyPreset(n){
   if(!PRESETS[n]) return;
   Object.assign(C,PRESETS[n],{preset:n});
   cfgSave(); syncUI(); applyRes();
+  applyUnityGraphics();
   mlog('Preset: '+n,'hi');
 }
 
@@ -631,32 +660,18 @@ function togglePanel(){
   const p=document.getElementById('panel');
   p.classList.toggle('open');
   document.getElementById('handle').classList.toggle('open',p.classList.contains('open'));
-  // When closing the panel, return focus to the canvas so Unity gets input again
-  if(!p.classList.contains('open')){
-    cv.focus();
-  }
+  if(!p.classList.contains('open')) cv.focus();
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  PANEL INPUT FOCUS GUARD
-//  Prevent panel inputs from leaking keyboard events to Unity
-// ═══════════════════════════════════════════════════════════════
+// Panel input focus guard
 document.getElementById('panel').addEventListener('focusin', e => {
-  const tag = e.target && e.target.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-    // Tell Unity to release keyboard capture while panel input is focused
-    if (unityInstance) {
-      try { unityInstance.SendMessage('Input', 'captureAllKeyboardInput', 'false'); } catch(_) {}
-    }
+  if(['INPUT','TEXTAREA','SELECT'].includes(e.target?.tagName)){
+    if(unityInstance) try{unityInstance.SendMessage('Input','captureAllKeyboardInput','false');}catch(_){}
   }
 }, true);
-
 document.getElementById('panel').addEventListener('focusout', e => {
-  const tag = e.target && e.target.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-    if (unityInstance) {
-      try { unityInstance.SendMessage('Input', 'captureAllKeyboardInput', 'true'); } catch(_) {}
-    }
+  if(['INPUT','TEXTAREA','SELECT'].includes(e.target?.tagName)){
+    if(unityInstance) try{unityInstance.SendMessage('Input','captureAllKeyboardInput','true');}catch(_){}
   }
 }, true);
 
@@ -723,7 +738,7 @@ setInterval(()=>{
 },3000);
 
 // ═══════════════════════════════════════════════════════════════
-//  INDEXEDDB CACHE  (key preserved: hk_cache_v4)
+//  INDEXEDDB CACHE
 // ═══════════════════════════════════════════════════════════════
 const CDB='hk_cache_v4',CST='files';
 let _cdb=null;
@@ -792,25 +807,19 @@ async function clearCache(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  FETCH PIPELINE  (cache-first interceptor)
+//  FETCH PIPELINE
 // ═══════════════════════════════════════════════════════════════
 const TOTAL_MB=912.81;
 let _lb=0,_te=TOTAL_MB*1048576;
 
-// Intercept ALL fetch calls — serve from IDB cache when possible
 const _origFetch=window.fetch.bind(window);
 window.fetch=async function(input,options){
   const url=typeof input==='string'?input:(input&&input.url?input.url:String(input));
-  // Check if this is a CDN asset request for any known source
   let matchedPath=null;
   for(const s of SOURCES){
     const base=s.base+'/';
-    if(url.startsWith(base)){
-      matchedPath=decodeURIComponent(url.slice(base.length).split('?')[0]);
-      break;
-    }
+    if(url.startsWith(base)){matchedPath=decodeURIComponent(url.slice(base.length).split('?')[0]);break;}
   }
-  // Also intercept raw fallback URLs
   if(!matchedPath){
     for(const[path,rawUrl]of Object.entries(RAW_FALLBACKS)){
       if(url===rawUrl){matchedPath=path;break;}
@@ -819,35 +828,23 @@ window.fetch=async function(input,options){
   if(matchedPath){
     try{
       const hit=await getCached(matchedPath);
-      if(hit&&hit.buf){
-        _lb+=hit.buf.byteLength;
-        return new Response(hit.buf,{status:200,headers:{'Content-Type':'application/octet-stream','X-Cache':'HIT'}});
-      }
+      if(hit&&hit.buf){_lb+=hit.buf.byteLength;return new Response(hit.buf,{status:200,headers:{'Content-Type':'application/octet-stream','X-Cache':'HIT'}});}
     }catch(e){}
   }
   return _origFetch(input,options);
 };
 
 async function fetchWithProgress(path){
-  // Use raw fallback URL when available, otherwise CDN
   const url=resolveUrl(path);
   try{
     const hit=await getCached(path);
-    if(hit&&hit.buf){
-      _lb+=hit.buf.byteLength;
-      updateBootProgress();
-      return hit.buf;
-    }
+    if(hit&&hit.buf){_lb+=hit.buf.byteLength;updateBootProgress();return hit.buf;}
   }catch(e){}
   const resp=await _origFetch(url);
   if(!resp.ok) throw new Error('HTTP '+resp.status+': '+url);
   const reader=resp.body.getReader();
   const chunks=[];
-  while(true){
-    const{done,value}=await reader.read();
-    if(done) break;
-    _lb+=value.length;chunks.push(value);updateBootProgress();
-  }
+  while(true){const{done,value}=await reader.read();if(done)break;_lb+=value.length;chunks.push(value);updateBootProgress();}
   const total=chunks.reduce((a,c)=>a+c.length,0);
   const buf=new Uint8Array(total);
   let off=0;for(const c of chunks){buf.set(c,off);off+=c.length;}
@@ -881,8 +878,6 @@ async function fetchPartsParallel(base,from,to){
 
 // ═══════════════════════════════════════════════════════════════
 //  BACKGROUND CACHE
-//  Passively caches streaming assets as Unity requests them.
-//  ZIPs are fetched in 8MB chunks to stay within jsDelivr limits.
 // ═══════════════════════════════════════════════════════════════
 async function autoCacheAll(){
   mlog('Background cache starting…','info');
@@ -894,7 +889,6 @@ async function autoCacheAll(){
     try{
       const already=await hasCached(path);
       if(already){skipped++;return;}
-      // Use raw fallback URL when available
       const url=resolveUrl(path);
       const resp=await _origFetch(url);
       if(!resp.ok) throw new Error('HTTP '+resp.status);
@@ -904,45 +898,29 @@ async function autoCacheAll(){
     }catch(e){failed++;mlog('Fetch fail: '+path+' — '+e.message,'warn');}
   };
 
-  // 1. Root JSON files
   for(const f of['RuntimeInitializeOnLoads.json','ScriptingAssemblies.json']){
     await fetchAndCacheOne(f);
   }
 
-  // 2. Build parts (already cached during boot, fill any gaps)
   const buildParts=[];
   for(let i=1;i<=45;i++) buildParts.push('Build/hktruffled.data.part'+i);
   for(let i=1;i<=2;i++)  buildParts.push('Build/hktruffled.wasm.part'+i);
   buildParts.push('Build/hktruffled.framework.js','Build/hktruffled.loader.js');
   for(const f of buildParts) await fetchAndCacheOne(f);
 
-  // 3. StreamingAssets — known cutscene files
-  //    FinalE uses raw fallback; others use CDN
   const knownSA=Object.keys(CMAP);
-  for(const name of knownSA){
-    const path=CMAP[name];
-    await fetchAndCacheOne(path);
-  }
+  for(const name of knownSA){await fetchAndCacheOne(CMAP[name]);}
 
-  // 4. ZIPs — fetch in 8MB Range chunks to avoid jsDelivr's size limit,
-  //    then reassemble and unpack. Falls back to a single full fetch
-  //    in case the server doesn't support Range requests.
   for(const zipName of['HK_Assets.zip','HK_Resources.zip']){
     mlog('Fetching '+zipName+'…','info');
     setPill('↓ '+zipName+'…','caching');
     try{
       const zipUrl=cdnUrl(zipName);
-
-      // Probe content-length via HEAD
       let totalBytes=0;
-      try{
-        const head=await _origFetch(zipUrl,{method:'HEAD'});
-        totalBytes=parseInt(head.headers.get('content-length')||'0',10)||0;
-      }catch(_){}
+      try{const head=await _origFetch(zipUrl,{method:'HEAD'});totalBytes=parseInt(head.headers.get('content-length')||'0',10)||0;}catch(_){}
 
       let zipBuf;
       if(totalBytes>0){
-        // Chunked fetch: 8MB slices
         const CHUNK=8*1024*1024;
         const chunks=[];
         for(let start=0;start<totalBytes;start+=CHUNK){
@@ -956,7 +934,6 @@ async function autoCacheAll(){
         let off=0;for(const c of chunks){assembled.set(new Uint8Array(c),off);off+=c.byteLength;}
         zipBuf=assembled.buffer;
       }else{
-        // No content-length — try a straight fetch
         const r=await _origFetch(zipUrl);
         if(!r.ok) throw new Error('HTTP '+r.status+': '+zipName);
         zipBuf=await r.arrayBuffer();
@@ -966,7 +943,6 @@ async function autoCacheAll(){
       const names=Object.keys(zip.files).filter(n=>!zip.files[n].dir);
       mlog(zipName+': '+names.length+' files','info');
       for(const name of names){
-        // Flat extraction — strip directory prefix, keep filename only
         const rootPath=name.includes('/')?name.split('/').pop():name;
         try{
           const already=await hasCached(rootPath);
@@ -976,11 +952,7 @@ async function autoCacheAll(){
           cached++;
         }catch(e){failed++;mlog('ZIP write fail: '+name+' — '+e.message,'warn');}
       }
-    }catch(e){
-      mlog('ZIP fail: '+zipName+' — '+e.message,'warn');
-      // Not a hard error — Unity will still request files individually
-      // and the fetch interceptor will cache them on first access
-    }
+    }catch(e){mlog('ZIP fail: '+zipName+' — '+e.message,'warn');}
   }
 
   const total=cached+skipped+failed;
@@ -1120,7 +1092,6 @@ hkv.addEventListener('error',()=>{hkv.style.display='none';csState='idle';doSkip
 function csPlay(name){
   if(!CMAP[name]||csState==='playing') return;
   csState='playing';
-  // Resolve URL — use raw fallback for files that 403 on jsDelivr
   const assetPath=CMAP[name];
   const url=resolveUrl(assetPath);
   _origFetch(url,{method:'HEAD'}).then(r=>{
@@ -1146,7 +1117,7 @@ function doSkipAll(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  SAVE PROFILES  (key preserved: hk_saves_v1)
+//  SAVE PROFILES
 // ═══════════════════════════════════════════════════════════════
 const SAVE_SK='hk_saves_v1';
 let _slots=[],_activeSlot=0;
@@ -1166,11 +1137,9 @@ function renderSlotList(){
   _slots.forEach((sl,i)=>{
     const isActive=i===_activeSlot;
     const row=document.createElement('div');row.className='slot';
-
     const icon=document.createElement('span');
     icon.className='slot-icon'+(isActive?' active':'');
     icon.textContent=isActive?'▶':'○';
-
     const info=document.createElement('div');info.className='slot-info';
     const nm=document.createElement('div');
     nm.className='slot-name'+(isActive?' active':'');
@@ -1178,14 +1147,11 @@ function renderSlotList(){
     const meta=document.createElement('div');meta.className='slot-meta';
     meta.textContent=sl.ts?new Date(sl.ts).toLocaleDateString()+' · '+new Date(sl.ts).toLocaleTimeString():'No save data';
     info.appendChild(nm);info.appendChild(meta);
-
     const acts=document.createElement('div');acts.className='slot-actions';
-
     const selectBtn=document.createElement('button');
     selectBtn.className='sb'+(isActive?' is-active':'');
     selectBtn.textContent=isActive?'Active':'Select';
     selectBtn.onclick=()=>{_activeSlot=i;persistSlots();renderSlotList();mlog('Active: '+sl.name,'ok');};
-
     const delBtn=document.createElement('button');
     delBtn.className='sb bad';delBtn.textContent='✕';
     delBtn.title='Delete profile';
@@ -1196,7 +1162,6 @@ function renderSlotList(){
       if(_activeSlot>=_slots.length) _activeSlot=_slots.length-1;
       persistSlots();renderSlotList();mlog('Profile deleted','ok');
     };
-
     acts.appendChild(selectBtn);acts.appendChild(delBtn);
     row.appendChild(icon);row.appendChild(info);row.appendChild(acts);
     cont.appendChild(row);
@@ -1214,7 +1179,7 @@ function createSlot(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  SAVE EXPORT  (raw IDB dump — unchanged)
+//  SAVE EXPORT
 // ═══════════════════════════════════════════════════════════════
 async function doDownloadSave(){
   mlog('Reading save database…','hi');
@@ -1252,13 +1217,11 @@ let _saveData=null,_saveFormat=null;
 
 function detectSaveFormat(data){
   if(data&&typeof data==='object'&&!Array.isArray(data)){
-    if(data.playerData||data.sceneData||data.profileID!==undefined||data.version!==undefined){
+    if(data.playerData||data.sceneData||data.profileID!==undefined||data.version!==undefined)
       return 'hk-native';
-    }
   }
-  if(Array.isArray(data)&&data.length>0&&data[0]&&data[0].key!==undefined&&data[0].value!==undefined){
+  if(Array.isArray(data)&&data.length>0&&data[0]&&data[0].key!==undefined&&data[0].value!==undefined)
     return 'idb-dump';
-  }
   return 'unknown';
 }
 
@@ -1353,93 +1316,81 @@ async function doInjectSave(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  INJECT NATIVE HK SAVE (playerData JSON)
+//  INJECT NATIVE HK SAVE
 //
-//  Fix 1: Correct IDB path prefix — Unity's IDBFS mounts at /idbfs,
-//         not /root/files. Keys look like: /idbfs/<hash>/playerdata
-//  Fix 2: No-hash case — if the player has never launched the game
-//         we generate a fresh 32-char hex hash so the path is valid.
+//  FIX: hash regex broadened to [0-9a-f]{8,} to match the actual
+//  28-char hash used by Unity's IDBFS (not 32 as previously assumed).
 // ═══════════════════════════════════════════════════════════════
 function generateHash(){
-  // Generate a 32-char lowercase hex string matching Unity's IDBFS hash format
-  const arr=new Uint8Array(16);
+  const arr=new Uint8Array(14); // 28 hex chars = 14 bytes, matching observed hash length
   crypto.getRandomValues(arr);
   return Array.from(arr,b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-async function injectNativeHKSave(data){
-  const pd=data.playerData||data;
-  const sd=data.sceneData||null;
+async function injectNativeHKSave(data) {
+  // Write the full root object so Unity gets both playerData + sceneData
+  const payload = (data.playerData || data.sceneData)
+    ? data
+    : { playerData: data };
 
-  await new Promise((resolve,reject)=>{
-    const req=indexedDB.open('/idbfs');
-    req.onupgradeneeded=e=>{
-      if(!e.target.result.objectStoreNames.contains('FILE_DATA'))
+  await new Promise((resolve, reject) => {
+    const req = indexedDB.open('/idbfs');
+    req.onupgradeneeded = e => {
+      if (!e.target.result.objectStoreNames.contains('FILE_DATA'))
         e.target.result.createObjectStore('FILE_DATA');
     };
-    req.onerror=()=>reject(new Error('Cannot open /idbfs'));
-    req.onsuccess=e=>{
-      const db=e.target.result;
-      const krReq=db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys();
-      krReq.onerror=()=>reject(new Error('Key read failed'));
-      krReq.onsuccess=()=>{
-        const keys=krReq.result;
+    req.onerror = () => reject(new Error('Cannot open /idbfs'));
+    req.onsuccess = e => {
+      const db = e.target.result;
+      const krReq = db.transaction('FILE_DATA', 'readonly').objectStore('FILE_DATA').getAllKeys();
+      krReq.onerror = () => reject(new Error('Key read failed'));
+      krReq.onsuccess = () => {
+        const keys = krReq.result;
 
-        // Extract hash from an existing key like /idbfs/<hash>/something
-        // or /idbfs/<hash>  (directory entry)
-        let hash=null;
-        for(const k of keys){
-          const s=String(k);
-          // Match /idbfs/<32-char-hex> optionally followed by /...
-          const m=s.match(/^\/idbfs\/([0-9a-f]{32})(?:\/|$)/i);
-          if(m){hash=m[1];break;}
+        let hash = null;
+        for (const k of keys) {
+          const m = String(k).match(/^\/idbfs\/([0-9a-f]{8,})(?:\/|$)/i);
+          if (m) { hash = m[1]; break; }
         }
 
-        // No prior save — generate a fresh hash
-        if(!hash){
-          hash=generateHash();
-          mlog('No existing save DB — using generated hash: '+hash,'info');
-        }else{
-          mlog('Found existing hash: '+hash,'info');
+        if (!hash) {
+          hash = generateHash();
+          mlog('No existing save DB — generated hash: ' + hash, 'info');
+        } else {
+          mlog('Found hash: ' + hash, 'info');
         }
 
-        const enc=new TextEncoder();
-        const toInt8=(obj)=>{
-          const json=JSON.stringify(obj);
-          const bytes=enc.encode(json);
-          const arr=new Int8Array(bytes.length);
-          for(let i=0;i<bytes.length;i++) arr[i]=bytes[i];
-          return arr;
+        const toInt8 = obj => {
+          const bytes = new TextEncoder().encode(JSON.stringify(obj));
+          // Use Uint8Array — Int8Array corrupts bytes > 127
+          return bytes;
         };
 
-        const now=new Date();
-        const dirKey='/idbfs/'+hash;
-        const pdKey='/idbfs/'+hash+'/playerdata';
-        const sdKey='/idbfs/'+hash+'/scenedata';
+        const now    = new Date();
+        const dirKey = '/idbfs/' + hash;
+        const pdKey  = '/idbfs/' + hash + '/playerdata';
 
-        const wtx=db.transaction('FILE_DATA','readwrite');
-        const ws=wtx.objectStore('FILE_DATA');
+        const wtx = db.transaction('FILE_DATA', 'readwrite');
+        const ws  = wtx.objectStore('FILE_DATA');
+        ws.put({ timestamp: now, mode: 16877, contents: undefined }, dirKey);
+        ws.put({ timestamp: now, mode: 33206, contents: toInt8(payload) }, pdKey);
 
-        // Ensure the directory entry exists
-        ws.put({timestamp:now,mode:16877,contents:undefined},dirKey);
-        // Write playerdata
-        ws.put({timestamp:now,mode:33206,contents:toInt8(pd)},pdKey);
-        // Write scenedata if present
-        if(sd) ws.put({timestamp:now,mode:33206,contents:toInt8(sd)},sdKey);
-
-        wtx.oncomplete=()=>{
-          mlog('Save injected → '+pdKey,'ok');
+        wtx.oncomplete = () => {
+          mlog('Save injected → ' + pdKey, 'ok');
           db.close();
-          setTimeout(reloadGame,1500);
+          setTimeout(reloadGame, 1500);
           resolve();
         };
-        wtx.onerror=err=>{db.close();reject(new Error(String(err)));};
+        wtx.onerror = err => { db.close(); reject(new Error(String(err))); };
       };
     };
   });
 }
 
-// Inject raw IDB dump (legacy export format)
+// ═══════════════════════════════════════════════════════════════
+//  INJECT RAW IDB DUMP
+//  FIX: same hash regex broadened to [0-9a-f]{8,}
+// ═══════════════════════════════════════════════════════════════
 async function injectIDBDump(entries){
   await new Promise((resolve,reject)=>{
     const req=indexedDB.open('/idbfs');
@@ -1454,19 +1405,17 @@ async function injectIDBDump(entries){
       krReq.onerror=()=>reject(new Error('Key read failed'));
       krReq.onsuccess=()=>{
         const existing=krReq.result;
-        // Extract current hash from existing keys using same /idbfs/<hash> pattern
+        // FIX: broadened from {32} to {8,}
         let hash=null;
         for(const k of existing){
-          const m=String(k).match(/^\/idbfs\/([0-9a-f]{32})(?:\/|$)/i);
+          const m=String(k).match(/^\/idbfs\/([0-9a-f]{8,})(?:\/|$)/i);
           if(m){hash=m[1];break;}
         }
-        // Extract hash from the dump's keys
         let dumpHash=null;
         for(const entry of entries){
-          const m=String(entry.key).match(/^\/idbfs\/([0-9a-f]{32})(?:\/|$)/i);
+          const m=String(entry.key).match(/^\/idbfs\/([0-9a-f]{8,})(?:\/|$)/i);
           if(m){dumpHash=m[1];break;}
         }
-        // Use existing hash if available (so save slots align), else keep dump's hash
         const targetHash=hash||dumpHash||generateHash();
 
         const tx=db.transaction('FILE_DATA','readwrite');
@@ -1474,7 +1423,6 @@ async function injectIDBDump(entries){
         st.clear();
         let written=0;
         for(const entry of entries){
-          // Remap the dump's hash to the target hash
           let key=String(entry.key);
           if(dumpHash&&dumpHash!==targetHash){
             key=key.replace('/idbfs/'+dumpHash,'/idbfs/'+targetHash);
@@ -1539,6 +1487,8 @@ async function reloadGame(){
       mlog('Unity reloaded ⚔','ok');
       mlog(C.preset+'|'+RES[Math.min(C.resolution,RES.length-1)].l+'|'+C.memory+'MB','hi');
       setTimeout(fireGP,4000);
+      // Re-push graphics settings after reload
+      setTimeout(applyUnityGraphics,2000);
     });
   }catch(e){
     mlog('Reload error: '+e.message,'err');
@@ -1596,7 +1546,6 @@ function buildUnityConfig(dataUrl,wasmBuf,fwUrl){
     devicePixelRatio:C.dpiScale,
     matchWebGLToCanvasSize:false,
     memory:C.memory*1024*1024,
-    // FIX: pass captureAllKeyboardInput so Unity respects our setting
     captureAllKeyboardInput:C.captureAllKeyboardInput,
     webglContextAttributes:{
       antialias:C.antialias,alpha:false,depth:C.depth,stencil:C.stencil,
@@ -1644,14 +1593,13 @@ async function launchUnity(loadingEl,setProgress,setSubtitle,onReady){
   setTimeout(()=>{if(loadingEl.parentNode)loadingEl.remove();},600);
   applyRes();
   onReady();
+  // Push graphics settings once Unity is live
+  setTimeout(applyUnityGraphics,1500);
   setTimeout(()=>{_blobUrls.forEach(u=>URL.revokeObjectURL(u));_blobUrls.clear();},8*60*1000);
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  KEYBOARD SHARING
-//  Panel inputs stop propagation so Unity never sees those keys.
-//  The capture-phase listener below also handles clicks outside
-//  the panel returning focus to the canvas.
 // ═══════════════════════════════════════════════════════════════
 ['keydown','keyup','keypress'].forEach(event=>{
   window.addEventListener(event,e=>{
@@ -1660,11 +1608,9 @@ async function launchUnity(loadingEl,setProgress,setSubtitle,onReady){
   },true);
 });
 
-// Clicking on the game canvas when the panel is open returns keyboard focus to Unity
 document.addEventListener('pointerdown',e=>{
   const panel=document.getElementById('panel');
   if(!panel.classList.contains('open')) return;
-  // If click is outside the panel, close it and refocus canvas
   if(!panel.contains(e.target)&&e.target!==document.getElementById('handle')){
     panel.classList.remove('open');
     document.getElementById('handle').classList.remove('open');
