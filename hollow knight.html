@@ -813,25 +813,46 @@ const TOTAL_MB=912.81;
 let _lb=0,_te=TOTAL_MB*1048576;
 
 const _origFetch=window.fetch.bind(window);
-window.fetch=async function(input,options){
-  const url=typeof input==='string'?input:(input&&input.url?input.url:String(input));
-  let matchedPath=null;
-  for(const s of SOURCES){
-    const base=s.base+'/';
-    if(url.startsWith(base)){matchedPath=decodeURIComponent(url.slice(base.length).split('?')[0]);break;}
-  }
-  if(!matchedPath){
-    for(const[path,rawUrl]of Object.entries(RAW_FALLBACKS)){
-      if(url===rawUrl){matchedPath=path;break;}
+window.fetch = async function(input, options) {
+  const url = typeof input === 'string' ? input : (input?.url ?? String(input));
+
+  // Extract a canonical asset path from ANY host — works for jsDelivr, GAS proxy, raw.githubusercontent, etc.
+  // Matches the last meaningful path segment(s) after any known asset root keyword
+  const gasMatch = url.match(/(?:sharedassets|resources\.resource|\.assets|StreamingAssets|Build\/)[^\?]*/);
+  const cdnMatch = (() => {
+    for (const s of SOURCES) {
+      const base = s.base + '/';
+      if (url.startsWith(base))
+        return decodeURIComponent(url.slice(base.length).split('?')[0]);
     }
+    for (const [path, rawUrl] of Object.entries(RAW_FALLBACKS))
+      if (url === rawUrl) return path;
+    return null;
+  })();
+
+  const matchedPath = cdnMatch ?? (gasMatch ? gasMatch[0] : null);
+
+  if (matchedPath) {
+    try {
+      const hit = await getCached(matchedPath);
+      if (hit?.buf) {
+        _lb += hit.buf.byteLength;
+        return new Response(hit.buf, {
+          status: 200,
+          headers: { 'Content-Type': 'application/octet-stream', 'X-Cache': 'HIT' }
+        });
+      }
+    } catch(e) {}
   }
-  if(matchedPath){
-    try{
-      const hit=await getCached(matchedPath);
-      if(hit&&hit.buf){_lb+=hit.buf.byteLength;return new Response(hit.buf,{status:200,headers:{'Content-Type':'application/octet-stream','X-Cache':'HIT'}});}
-    }catch(e){}
+
+  const resp = await _origFetch(input, options);
+
+  // Cache the response on first fetch so subsequent requests are served locally
+  if (matchedPath && resp.ok) {
+    resp.clone().arrayBuffer().then(buf => putCached(matchedPath, buf)).catch(() => {});
   }
-  return _origFetch(input,options);
+
+  return resp;
 };
 
 async function fetchWithProgress(path){
