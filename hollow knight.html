@@ -114,7 +114,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:mon
         <div class="slbl">Actions</div>
         <button class="btn gold" onclick="autoOptimize()"><span class="bi">🔮</span><span class="bl">Auto-Detect Best Preset</span></button>
         <button class="btn" onclick="location.reload()"><span class="bi">🔄</span><span class="bl">Reload Page</span></button>
-        <button class="btn" onclick="clearAssetCache().then(()=>location.reload())"><span class="bi">🗑</span><span class="bl">Clear Cache &amp; Reload</span></button>
       </div>
       <div>
         <div class="slbl">Device Info</div>
@@ -210,7 +209,8 @@ try{_src=Math.max(0,Math.min(3,parseInt(localStorage.getItem('hk_src')||'0',10)|
 const cdnUrl=p=>SOURCES[_src].base+'/'+p;
 
 function switchSource(i){
-  if(i===_src)return;_src=i;
+  if(i===_src)return;
+  _src=i;
   try{localStorage.setItem('hk_src',String(i));}catch(e){}
   mlog('Source → '+SOURCES[i].name,'hi');
   clearAssetCache().then(()=>{mlog('Cache cleared. Reloading…','warn');setTimeout(()=>location.reload(),800);});
@@ -280,33 +280,48 @@ async function clearAssetCache(){
 }
 
 // ── FETCH / XHR INTERCEPT ─────────────────────────────────────────────────────
-// When served from GAS or file://, blob: URLs created here inherit a null/GAS
-// origin and fail when set as script src or video src. Fix: avoid blob URLs for
-// JS — eval() the text directly. For video, fetch→blob is still the right path
-// but we assign it via URL.createObjectURL which does work for media elements
-// even on null origins (they're not subject to script-src restrictions).
+// GAS rewrites the page origin to a blob URL, so any relative or same-origin
+// request Unity makes (fetch, XHR, video src) resolves against the GAS origin
+// and goes nowhere. We intercept ALL outgoing requests, detect asset paths by
+// their shape (not their origin), and reroute them directly to the real CDN.
 
+const TOTAL_MB=912.81,TOTAL_B=TOTAL_MB*1048576;
+let _loaded=0;
 const _origFetch=window.fetch.bind(window);
 const _origXHROpen=XMLHttpRequest.prototype.open;
 const _origXHRSend=XMLHttpRequest.prototype.send;
 
-const TOTAL_MB=912.81,TOTAL_B=TOTAL_MB*1048576;
-let _loaded=0;
-
+// Given any URL (absolute or relative, any origin), extract the asset path
+// if it looks like a game file, and return the real CDN URL for it.
+// Returns null if it's not a game asset.
 function resolveAssetUrl(raw){
+  let path;
   try{
-    const abs=new URL(raw,SOURCES[_src].base+'/').href;
+    // Normalize: resolve relative URLs against the real CDN base so we get
+    // a full URL, then strip origin to get just the path.
+    const abs=new URL(raw, SOURCES[_src].base+'/').href;
+    // Check if it already points at a known CDN source
     for(const s of SOURCES){
       if(abs.startsWith(s.base+'/')){
-        const path=decodeURIComponent(abs.slice(s.base.length+1).split('?')[0]);
-        return{path,url:SOURCES[_src].base+'/'+path};
+        path=decodeURIComponent(abs.slice(s.base.length+1).split('?')[0]);
+        return{path, url:SOURCES[_src].base+'/'+path};
       }
     }
-    if(abs.startsWith(RAW_SA))return{path:null,url:abs};
-    const u=new URL(abs),p=decodeURIComponent(u.pathname);
+    // Check raw GitHub
+    if(abs.startsWith(RAW_SA)){
+      return{path:null, url:abs}; // pass through raw GitHub unchanged
+    }
+    // Check if it's a blob or GAS origin URL containing a recognizable asset path
+    const u=new URL(abs);
+    const p=decodeURIComponent(u.pathname);
+    // Match known asset path patterns: Build/, StreamingAssets/, sharedassets
     if(/\/(Build|StreamingAssets|sharedassets)\b/.test(p)||/\.part\d+$/.test(p)||/\.(data|wasm|unityweb|bundle|resource|mp4)(\.\w+)?$/.test(p)){
+      // Strip any leading path segments before the known asset root
       const m=p.match(/\/((?:Build|StreamingAssets)\/.+)$/)||p.match(/(sharedassets\S+)$/);
-      if(m)return{path:m[1],url:SOURCES[_src].base+'/'+m[1]};
+      if(m){
+        path=m[1];
+        return{path, url:SOURCES[_src].base+'/'+path};
+      }
     }
   }catch(e){}
   return null;
@@ -316,12 +331,15 @@ window.fetch=async function(input,opts){
   const raw=typeof input==='string'?input:(input?.url??String(input));
   const asset=resolveAssetUrl(raw);
   if(asset){
-    if(asset.path){try{const hit=await getCached(asset.path);if(hit?.buf){_loaded+=hit.buf.byteLength;return new Response(hit.buf,{status:200});}}catch(e){}}
+    if(asset.path){
+      try{const hit=await getCached(asset.path);if(hit?.buf){_loaded+=hit.buf.byteLength;return new Response(hit.buf,{status:200});}}catch(e){}
+    }
     return _origFetch(asset.url,opts);
   }
   return _origFetch(input,opts);
 };
 
+// XHR override — Unity uses XHR for many asset loads (especially WASM streaming)
 XMLHttpRequest.prototype.open=function(method,url,...rest){
   const asset=resolveAssetUrl(url);
   this._hkRealUrl=asset?asset.url:null;
@@ -329,6 +347,7 @@ XMLHttpRequest.prototype.open=function(method,url,...rest){
   return _origXHROpen.call(this,method,this._hkRealUrl||url,...rest);
 };
 XMLHttpRequest.prototype.send=function(...args){
+  // If we have a cached buffer for this path, short-circuit with a synthetic response
   if(this._hkPath){
     const xhr=this;
     getCached(this._hkPath).then(hit=>{
@@ -343,13 +362,18 @@ XMLHttpRequest.prototype.send=function(...args){
         xhr.dispatchEvent(new ProgressEvent('loadend'));
         if(typeof xhr.onreadystatechange==='function')xhr.onreadystatechange();
         if(typeof xhr.onload==='function')xhr.onload(new ProgressEvent('load'));
-      }else{_origXHRSend.apply(xhr,args);}
+      }else{
+        _origXHRSend.apply(xhr,args);
+      }
     }).catch(()=>_origXHRSend.apply(this,args));
-  }else{_origXHRSend.apply(this,args);}
+  }else{
+    _origXHRSend.apply(this,args);
+  }
 };
 
 async function fetchPart(path){
   try{const hit=await getCached(path);if(hit?.buf){_loaded+=hit.buf.byteLength;setProgress();return hit.buf;}}catch(e){}
+  // _origFetch + absolute cdnUrl: bypasses both the GAS proxy and our own interceptor
   const r=await _origFetch(cdnUrl(path));
   if(!r.ok)throw new Error('HTTP '+r.status+' '+path);
   const reader=r.body.getReader(),chunks=[];
@@ -374,16 +398,6 @@ function setProgress(){
   document.getElementById('ls-fill').style.width=v+'%';
   document.getElementById('ls-pct').textContent=v+'%';
   document.getElementById('ls-sub').textContent=(_loaded/1048576).toFixed(1)+' / '+TOTAL_MB+' MB';
-}
-
-// ── EVAL-BASED SCRIPT LOADER ──────────────────────────────────────────────────
-// blob: URLs for <script src> fail when page origin is null (GAS/file://).
-// Instead, fetch the JS text and eval() it in the global scope.
-async function evalScript(path){
-  const buf=await fetchPart(path);
-  const text=new TextDecoder().decode(buf);
-  // Use indirect eval so the script runs in global scope, same as a <script> tag
-  (0,eval)(text);
 }
 
 // ── LOG ───────────────────────────────────────────────────────────────────────
@@ -418,7 +432,9 @@ function tab(n){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.t===n));
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='page-'+n));
 }
-function togglePanel(){document.getElementById('panel').classList.toggle('open');}
+function togglePanel(){
+  const p=document.getElementById('panel');p.classList.toggle('open');
+}
 ['keydown','keyup','keypress'].forEach(ev=>window.addEventListener(ev,e=>{
   if(['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))e.stopImmediatePropagation();
 },true));
@@ -426,15 +442,16 @@ function togglePanel(){document.getElementById('panel').classList.toggle('open')
 // ── CUTSCENE PLAYER ───────────────────────────────────────────────────────────
 const CMAP={Prologue:'Prologue.mp4',Intro:'Intro.mp4',FinalA:'FinalA.mp4',FinalB:'FinalB.mp4',FinalC:'FinalC.mp4',FinalD:'FinalD.mp4',FinalE:'FinalE.mp4',FinalF:'FinalF.mp4',Blacksmith:'Blacksmith.mp4',CharmSlugKiss:'CharmSlugKiss.mp4',Fountain:'Fountain.mp4',MaskShatter:'MaskShatter.mp4',MrMushroom:'MrMushroom.mp4',Nailsmith:'Nailsmith.mp4',NailsmithPaint:'NailsmithPaint.mp4',StagTunnelRun:'StagTunnelRun.mp4',Telescope:'Telescope.mp4'};
 const hkv=document.getElementById('hkv');
-let csState='idle',_csBlobUrl=null;
+let csState='idle';
 
+let _csBlobUrl=null;
 function csRevoke(){if(_csBlobUrl){URL.revokeObjectURL(_csBlobUrl);_csBlobUrl=null;}}
 hkv.addEventListener('ended',()=>{hkv.style.display='none';hkv.removeAttribute('src');hkv.load();csRevoke();csState='done';setTimeout(skipAll,80);});
 hkv.addEventListener('error',()=>{hkv.style.display='none';csRevoke();csState='idle';skipAll();});
 
-// Fix for GAS/null origin: fetch mp4 bytes via _origFetch, create blob URL.
-// Blob URLs used as video.src are NOT subject to script-src CSP and work fine
-// even when the page origin is null — only <script src=blob:null/...> fails.
+// Under GAS the page origin is a blob: URL, so setting hkv.src directly to an
+// https:// URL gets resolved against the GAS origin and fails. Fix: use _origFetch
+// to pull the mp4 bytes, then create a local blob URL for the video element.
 async function csPlay(name){
   if(!CMAP[name]||csState==='playing')return;
   csState='playing';
@@ -444,11 +461,13 @@ async function csPlay(name){
     csRevoke();
     _csBlobUrl=URL.createObjectURL(await r.blob());
     hkv.src=_csBlobUrl;
-  }catch(e){mlog('Cutscene failed: '+e.message,'warn');csState='done';skipAll();return;}
+  }catch(e){
+    mlog('Cutscene failed: '+e.message,'warn');
+    csState='done';skipAll();return;
+  }
   hkv.style.display='block';hkv.currentTime=0;hkv.muted=false;
   hkv.play().catch(()=>{csState='done';skipAll();});
 }
-
 function skipAll(){
   const cv=document.getElementById('unity-canvas');
   [{key:'Escape',code:'Escape',keyCode:27},{key:'Return',code:'Enter',keyCode:13},{key:' ',code:'Space',keyCode:32}].forEach(k=>{
@@ -460,7 +479,7 @@ function skipAll(){
   setTimeout(()=>{csState='idle';},500);
 }
 
-// ── SAVE ──────────────────────────────────────────────────────────────────────
+// ── SAVE — SLOT-BASED (.dat) & PURE JSON ─────────────────────────────────────
 let _saveFile=null,_saveFormat=null;
 
 function buildSlotExport(){
@@ -469,7 +488,7 @@ function buildSlotExport(){
     const row=document.createElement('div');row.className='slot-row';
     const num=document.createElement('span');num.className='slot-num';num.textContent=i;
     const dl=document.createElement('button');dl.className='slot-sb';dl.textContent='Export';
-    dl.onclick=(s=>()=>exportSlot(s))(i);
+    dl.onclick=(()=>{const slot=i;return()=>exportSlot(slot);})(i);
     row.appendChild(num);row.appendChild(dl);cont.appendChild(row);
   }
 }
@@ -480,14 +499,16 @@ function exportSlot(slot){
     const db=e.target.result;
     const st=db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA');
     st.getAllKeys().onsuccess=ev=>{
-      const hash=extractHash(ev.target.result);
+      const keys=ev.target.result;
+      if(!keys.length){mlog('No save DB — play first','err');return;}
+      const hash=extractHash(keys);
       if(!hash){mlog('Cannot find save hash','err');return;}
-      st.get('/idbfs/'+hash+'/user'+slot+'.dat').onsuccess=ev2=>{
+      const key='/idbfs/'+hash+'/user'+slot+'.dat';
+      st.get(key).onsuccess=ev2=>{
         const entry=ev2.target.result;
         if(!entry){mlog('Slot '+slot+' is empty','warn');return;}
-        const a=document.createElement('a');
-        a.href=URL.createObjectURL(new Blob([entry.contents],{type:'application/octet-stream'}));
-        a.download='user'+slot+'.dat';a.click();
+        const blob=new Blob([entry.contents],{type:'application/octet-stream'});
+        const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='user'+slot+'.dat';a.click();
         mlog('Exported slot '+slot,'ok');
       };
     };
@@ -502,7 +523,8 @@ dzEl.ondrop=e=>{e.preventDefault();dzEl.classList.remove('drag');if(e.dataTransf
 fi.onchange=()=>{if(fi.files[0])readSaveFile(fi.files[0]);};
 
 function readSaveFile(file){
-  if(file.name.toLowerCase().endsWith('.dat')){
+  const isDat=file.name.toLowerCase().endsWith('.dat');
+  if(isDat){
     const r=new FileReader();
     r.onload=e=>{
       _saveFile={bytes:new Uint8Array(e.target.result),name:file.name};
@@ -510,9 +532,11 @@ function readSaveFile(file){
       document.getElementById('dz-lbl').textContent='✓ '+file.name;
       dzEl.classList.add('has-file');
       showDatSlotPicker();
-      const sp=document.getElementById('save-preview');sp.style.display='block';
+      document.getElementById('save-preview').style.display='block';
       document.getElementById('prev-fmt').textContent='Binary .dat (slot-based)';
-      ['prev-pid','prev-pt','prev-cp'].forEach(id=>document.getElementById(id).textContent='—');
+      document.getElementById('prev-pid').textContent='—';
+      document.getElementById('prev-pt').textContent='—';
+      document.getElementById('prev-cp').textContent='—';
       document.getElementById('inj-btn').disabled=true;
       mlog('Loaded: '+file.name+' (.dat)','ok');
     };
@@ -521,10 +545,16 @@ function readSaveFile(file){
     const tr=new FileReader();
     tr.onload=e=>{
       const text=e.target.result.trim();
-      if(text.startsWith('{')||text.startsWith('['))parseSaveJSON(text,file.name);
-      else{
+      if(text.startsWith('{')||text.startsWith('[')){
+        parseSaveJSON(text,file.name);
+      }else{
         const br=new FileReader();
-        br.onload=ev=>{const dec=new TextDecoder('utf-8',{fatal:false}).decode(ev.target.result);const s=dec.indexOf('{');if(s===-1){mlog('Cannot parse file','err');return;}parseSaveJSON(dec.slice(s),file.name,'binary');};
+        br.onload=ev=>{
+          const decoded=new TextDecoder('utf-8',{fatal:false}).decode(ev.target.result);
+          const start=decoded.indexOf('{');
+          if(start===-1){mlog('Cannot parse file','err');return;}
+          parseSaveJSON(decoded.slice(start),file.name,'binary');
+        };
         br.readAsArrayBuffer(file);
       }
     };
@@ -533,7 +563,8 @@ function readSaveFile(file){
 }
 
 function parseSaveJSON(text,name,hint){
-  let data;try{data=JSON.parse(text);}catch(e){mlog('JSON parse failed: '+e.message,'err');return;}
+  let data;
+  try{data=JSON.parse(text);}catch(e){mlog('JSON parse failed: '+e.message,'err');return;}
   _saveFile=data;
   const isIDB=Array.isArray(data)&&data[0]?.key!==undefined;
   _saveFormat=hint||(isIDB?'idb-dump':'hk-native');
@@ -541,8 +572,10 @@ function parseSaveJSON(text,name,hint){
   dzEl.classList.add('has-file');
   document.getElementById('dat-slot-row').style.display='none';
   let pd=null;
-  if(_saveFormat==='idb-dump'){const e=data.find(x=>String(x.key).includes('playerdata'));if(e?.value?.contents)try{pd=JSON.parse(contentsToStr(e.value.contents));}catch(_){}}
-  else{pd=data.playerData||data;}
+  if(_saveFormat==='idb-dump'){
+    const e=data.find(x=>String(x.key).includes('playerdata'));
+    if(e?.value?.contents)try{pd=JSON.parse(contentsToStr(e.value.contents));}catch(_){}
+  }else{pd=data.playerData||data;}
   document.getElementById('prev-fmt').textContent=_saveFormat==='idb-dump'?'IDB Dump':hint==='binary'?'Binary JSON':'Plain JSON';
   document.getElementById('prev-pid').textContent=pd?.profileID??'—';
   document.getElementById('prev-pt').textContent=pd?.playTime!=null?fmtTime(pd.playTime):'—';
@@ -556,7 +589,12 @@ function showDatSlotPicker(){
   const cont=document.getElementById('dat-slot-row');cont.style.display='flex';cont.innerHTML='<span style="color:#444;font-size:8px;align-self:center">Import to slot:</span>';
   for(let i=1;i<=4;i++){
     const b=document.createElement('button');b.className='slot-sb';b.textContent='Slot '+i;
-    b.onclick=(s=>()=>{document.querySelectorAll('#dat-slot-row .slot-sb').forEach(x=>x.classList.remove('act'));b.classList.add('act');_saveFile.targetSlot=s;document.getElementById('inj-btn').disabled=false;})(i);
+    b.onclick=(()=>{const slot=i;return()=>{
+      document.querySelectorAll('#dat-slot-row .slot-sb').forEach(x=>x.classList.remove('act'));
+      b.classList.add('act');
+      _saveFile.targetSlot=slot;
+      document.getElementById('inj-btn').disabled=false;
+    };})(i);
     cont.appendChild(b);
   }
 }
@@ -574,73 +612,87 @@ const fmtTime=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h+
 async function doInject(){
   if(!_saveFile){mlog('No save loaded','err');return;}
   try{
-    if(_saveFormat==='dat')await injectDat(_saveFile.bytes,_saveFile.targetSlot);
-    else if(_saveFormat==='idb-dump')await injectIDBDump(Array.isArray(_saveFile)?_saveFile:[_saveFile]);
-    else await injectNativeJSON(_saveFile);
+    if(_saveFormat==='dat'){
+      await injectDat(_saveFile.bytes,_saveFile.targetSlot);
+    }else if(_saveFormat==='idb-dump'){
+      await injectIDBDump(Array.isArray(_saveFile)?_saveFile:[_saveFile]);
+    }else{
+      await injectNativeJSON(_saveFile);
+    }
   }catch(e){mlog('Inject error: '+e.message,'err');}
 }
 
 function extractHash(keys){for(const k of keys){const m=String(k).match(/^\/idbfs\/([0-9a-f]{32})(?:\/|$)/i);if(m)return m[1];}return null;}
 function genHash(){const a=new Uint8Array(16);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('');}
 
-async function openIdbfs(){
-  return new Promise((res,rej)=>{
-    const req=indexedDB.open('/idbfs');
-    req.onupgradeneeded=e=>{if(!e.target.result.objectStoreNames.contains('FILE_DATA'))e.target.result.createObjectStore('FILE_DATA');};
-    req.onerror=()=>rej(new Error('Cannot open /idbfs'));
-    req.onsuccess=e=>res(e.target.result);
-  });
-}
-
 async function injectDat(bytes,slot){
   if(!slot){mlog('Pick a slot first','warn');return;}
-  const db=await openIdbfs();
-  await new Promise((res,rej)=>{
-    db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
-      const hash=extractHash(ev.target.result)||genHash();
-      const tx=db.transaction('FILE_DATA','readwrite');
-      tx.objectStore('FILE_DATA').put({timestamp:new Date().toISOString(),mode:33206,contents:bytes},'/idbfs/'+hash+'/user'+slot+'.dat');
-      tx.oncomplete=()=>{mlog('Injected .dat → slot '+slot,'ok');db.close();setTimeout(()=>location.reload(),1200);res();};
-      tx.onerror=e=>{db.close();rej(new Error(String(e)));};
+  await new Promise((resolve,reject)=>{
+    const req=indexedDB.open('/idbfs');
+    req.onupgradeneeded=e=>{if(!e.target.result.objectStoreNames.contains('FILE_DATA'))e.target.result.createObjectStore('FILE_DATA');};
+    req.onerror=()=>reject(new Error('Cannot open /idbfs'));
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
+        const hash=extractHash(ev.target.result)||genHash();
+        const key='/idbfs/'+hash+'/user'+slot+'.dat';
+        const tx=db.transaction('FILE_DATA','readwrite');
+        tx.objectStore('FILE_DATA').put({timestamp:new Date().toISOString(),mode:33206,contents:bytes},key);
+        tx.oncomplete=()=>{mlog('Injected .dat → slot '+slot,'ok');db.close();setTimeout(()=>location.reload(),1200);resolve();};
+        tx.onerror=err=>{db.close();reject(new Error(String(err)));};
+      };
     };
   });
 }
 
 async function injectNativeJSON(data){
   const pd=data.playerData||data,sd=data.sceneData||null;
-  const db=await openIdbfs();
-  await new Promise((res,rej)=>{
-    db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
-      const hash=extractHash(ev.target.result)||genHash();
-      const enc=new TextEncoder(),now=new Date(),dir='/idbfs/'+hash;
-      const toI8=obj=>{const b=enc.encode(JSON.stringify(obj));const a=new Int8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b[i];return a;};
-      const tx=db.transaction('FILE_DATA','readwrite'),ws=tx.objectStore('FILE_DATA');
-      ws.put({timestamp:now,mode:16877,contents:undefined},dir);
-      ws.put({timestamp:now,mode:33206,contents:toI8(pd)},dir+'/playerdata');
-      if(sd)ws.put({timestamp:now,mode:33206,contents:toI8(sd)},dir+'/scenedata');
-      tx.oncomplete=()=>{mlog('JSON injected → '+dir,'ok');db.close();setTimeout(()=>location.reload(),1200);res();};
-      tx.onerror=e=>{db.close();rej(new Error(String(e)));};
+  await new Promise((resolve,reject)=>{
+    const req=indexedDB.open('/idbfs');
+    req.onupgradeneeded=e=>{if(!e.target.result.objectStoreNames.contains('FILE_DATA'))e.target.result.createObjectStore('FILE_DATA');};
+    req.onerror=()=>reject(new Error('Cannot open /idbfs'));
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
+        const hash=extractHash(ev.target.result)||genHash();
+        mlog('Hash: '+hash,'info');
+        const enc=new TextEncoder();
+        const toI8=obj=>{const b=enc.encode(JSON.stringify(obj));const a=new Int8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b[i];return a;};
+        const now=new Date(),dir='/idbfs/'+hash;
+        const tx=db.transaction('FILE_DATA','readwrite'),ws=tx.objectStore('FILE_DATA');
+        ws.put({timestamp:now,mode:16877,contents:undefined},dir);
+        ws.put({timestamp:now,mode:33206,contents:toI8(pd)},dir+'/playerdata');
+        if(sd)ws.put({timestamp:now,mode:33206,contents:toI8(sd)},dir+'/scenedata');
+        tx.oncomplete=()=>{mlog('JSON injected → '+dir,'ok');db.close();setTimeout(()=>location.reload(),1200);resolve();};
+        tx.onerror=err=>{db.close();reject(new Error(String(err)));};
+      };
     };
   });
 }
 
 async function injectIDBDump(entries){
-  const db=await openIdbfs();
-  await new Promise((res,rej)=>{
-    db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
-      const existHash=extractHash(ev.target.result),dumpHash=extractHash(entries.map(x=>x.key));
-      const target=existHash||dumpHash||genHash();
-      const tx=db.transaction('FILE_DATA','readwrite'),st=tx.objectStore('FILE_DATA');
-      st.clear();let n=0;
-      for(const entry of entries){
-        let key=String(entry.key);
-        if(dumpHash&&dumpHash!==target)key=key.replace('/idbfs/'+dumpHash,'/idbfs/'+target);
-        let c=entry.value.contents;
-        if(c&&typeof c==='object'&&!(c instanceof Int8Array)){const idx=Object.keys(c).map(Number).sort((a,b)=>a-b);const a=new Int8Array(idx.length);idx.forEach(i=>a[i]=c[i]);c=a;}
-        st.put({timestamp:new Date(entry.value.timestamp),mode:entry.value.mode,contents:c},key);n++;
-      }
-      tx.oncomplete=()=>{mlog('IDB dump injected ('+n+' entries)','ok');db.close();setTimeout(()=>location.reload(),1200);res();};
-      tx.onerror=e=>{db.close();rej(new Error(String(e)));};
+  await new Promise((resolve,reject)=>{
+    const req=indexedDB.open('/idbfs');
+    req.onupgradeneeded=e=>{if(!e.target.result.objectStoreNames.contains('FILE_DATA'))e.target.result.createObjectStore('FILE_DATA');};
+    req.onerror=()=>reject(new Error('Cannot open /idbfs'));
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
+        const existHash=extractHash(ev.target.result);
+        const dumpHash=extractHash(entries.map(x=>x.key));
+        const target=existHash||dumpHash||genHash();
+        const tx=db.transaction('FILE_DATA','readwrite'),st=tx.objectStore('FILE_DATA');
+        st.clear();let n=0;
+        for(const entry of entries){
+          let key=String(entry.key);
+          if(dumpHash&&dumpHash!==target)key=key.replace('/idbfs/'+dumpHash,'/idbfs/'+target);
+          let c=entry.value.contents;
+          if(c&&typeof c==='object'&&!(c instanceof Int8Array)){const idx=Object.keys(c).map(Number).sort((a,b)=>a-b);const a=new Int8Array(idx.length);idx.forEach(i=>a[i]=c[i]);c=a;}
+          st.put({timestamp:new Date(entry.value.timestamp),mode:entry.value.mode,contents:c},key);n++;
+        }
+        tx.oncomplete=()=>{mlog('IDB dump injected ('+n+' entries)','ok');db.close();setTimeout(()=>location.reload(),1200);resolve();};
+        tx.onerror=err=>{db.close();reject(new Error(String(err)));};
+      };
     };
   });
 }
@@ -660,7 +712,9 @@ async function injectIDBDump(entries){
   document.getElementById('inf-ram').textContent=(navigator.deviceMemory||'?')+' GB';
   document.getElementById('inf-pre').textContent=C.preset;
   document.querySelectorAll('.qb').forEach(b=>b.classList.toggle('on',b.dataset.q===C.preset));
-  updateSrcUI();buildSlotExport();await openCDB();
+  updateSrcUI();
+  buildSlotExport();
+  await openCDB();
 
   const[dataBuf,wasmBuf,fwBuf,ldrBuf]=await Promise.all([
     fetchParts('Build/hktruffled.data',1,45),
@@ -669,21 +723,18 @@ async function injectIDBDump(entries){
     fetchPart('Build/hktruffled.loader.js'),
   ]);
 
-  // Loader: eval so createUnityInstance is defined globally without a script tag.
-  (0,eval)(new TextDecoder().decode(ldrBuf));
-
-  // Framework + Data: blob URLs. When about:blank is opened via window.open +
-  // document.write from a launcher with a real origin (GAS, localhost, etc),
-  // about:blank inherits that origin, so blob: URLs resolve correctly.
-  const frameworkUrl=URL.createObjectURL(new Blob([fwBuf],{type:'application/javascript'}));
   const dataUrl=URL.createObjectURL(new Blob([dataBuf]));
+  const fwUrl=URL.createObjectURL(new Blob([fwBuf],{type:'application/javascript'}));
+
+  const ldrUrl=URL.createObjectURL(new Blob([ldrBuf],{type:'application/javascript'}));
+  await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src=ldrUrl;sc.onload=res;sc.onerror=()=>rej(new Error('Loader failed'));document.body.appendChild(sc);});
 
   const cv=document.getElementById('unity-canvas');
   document.getElementById('ls-sub').textContent='Starting engine…';
 
   const inst=await createUnityInstance(cv,{
     dataUrl,
-    frameworkUrl,
+    frameworkUrl:fwUrl,
     instantiateWasm(imports,onSuccess){
       WebAssembly.instantiate(wasmBuf,imports).then(r=>onSuccess(r.instance,r.module)).catch(e=>mlog('WASM: '+e,'err'));
       return{};
@@ -703,13 +754,19 @@ async function injectIDBDump(entries){
   mlog(C.preset+' | '+C.memory+'MB | '+SOURCES[_src].name,'info');
 
   let lastT=performance.now();
-  (function fps(){const now=performance.now(),dt=(now-lastT)/1000;lastT=now;document.getElementById('fps').textContent='FPS: '+Math.round(dt>0?1/dt:60);requestAnimationFrame(fps);})();
+  (function fps(){
+    const now=performance.now(),dt=(now-lastT)/1000;lastT=now;
+    document.getElementById('fps').textContent='FPS: '+Math.round(dt>0?1/dt:60);
+    requestAnimationFrame(fps);
+  })();
+
   setInterval(()=>{const m=performance.memory;if(m)document.getElementById('inf-heap').textContent=Math.round(m.usedJSHeapSize/1048576)+' MB';},3000);
 
-  if(!window.FS?._patched&&window.FS?.syncfs){
-    let _syncing=false;const orig=window.FS.syncfs;
-    window.FS.syncfs=function(pop,cb){if(_syncing){if(cb)cb(null);return;}_syncing=true;orig.call(window.FS,pop,err=>{_syncing=false;if(cb)cb(err);});};
-    window.FS._patched=true;
+  if(!window.FS?._patched){
+    window.FS=window.FS||{};
+    let _syncing=false;
+    const orig=window.FS.syncfs;
+    if(orig){window.FS.syncfs=function(pop,cb){if(_syncing){if(cb)cb(null);return;}_syncing=true;orig.call(window.FS,pop,err=>{_syncing=false;if(cb)cb(err);});};window.FS._patched=true;}
   }
 })().catch(e=>{mlog('Boot error: '+e.message,'err');const s=document.getElementById('ls-sub');s.textContent='Error — see Log tab';s.style.color='#ef5350';});
 </script>
