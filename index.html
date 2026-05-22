@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Index</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #080808;
+  --fg: #c8c8c8;
+  --dim: #444;
+  --dim2: #2a2a2a;
+  --acc: #e8e8e8;
+  --line: #161616;
+  --hover-bg: #0f0f0f;
+  --tag: #333;
+  --tag-fg: #888;
+  --ff: 'IBM Plex Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--ff);
+  font-size: 12px;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+#header {
+  border-bottom: 1px solid var(--line);
+  padding: 28px 32px 20px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 12px;
+}
+#repo-id {
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: .08em;
+  margin-bottom: 6px;
+}
+#title {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--acc);
+  letter-spacing: -.01em;
+}
+#meta-right {
+  text-align: right;
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1.9;
+  letter-spacing: .05em;
+}
+#meta-right span { color: var(--fg); }
+
+/* ── CONTROLS ── */
+#controls {
+  padding: 12px 32px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+#search-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 320px;
+}
+#search-wrap::before {
+  content: '/';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--dim);
+  pointer-events: none;
+  font-size: 13px;
+}
+#search {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font: 12px var(--ff);
+  padding: 4px 0 4px 14px;
+  width: 100%;
+  caret-color: var(--acc);
+}
+#search::placeholder { color: var(--dim); }
+#sort-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 0;
+}
+.sort-btn {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font: 10px var(--ff);
+  cursor: pointer;
+  padding: 4px 10px;
+  letter-spacing: .08em;
+  transition: color .15s;
+  border-left: 1px solid var(--line);
+}
+.sort-btn:hover { color: var(--fg); }
+.sort-btn.on { color: var(--acc); }
+#count-label {
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: .06em;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+  margin-left: 12px;
+}
+#count-label span { color: var(--fg); }
+
+/* ── TABLE HEADER ── */
+#col-header {
+  display: grid;
+  grid-template-columns: 24px 1fr 90px 90px 110px;
+  padding: 8px 32px;
+  border-bottom: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 9px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  gap: 0 16px;
+}
+
+/* ── FILE LIST ── */
+#list { padding: 0; }
+
+.entry {
+  display: grid;
+  grid-template-columns: 24px 1fr 90px 90px 110px;
+  gap: 0 16px;
+  align-items: center;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: background .08s;
+  min-height: 40px;
+  position: relative;
+}
+.entry:hover { background: var(--hover-bg); }
+.entry:hover .e-name { color: var(--acc); }
+
+.e-idx {
+  color: var(--dim2);
+  font-size: 10px;
+  text-align: right;
+  user-select: none;
+}
+.e-name {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color .08s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.e-name-text { overflow: hidden; text-overflow: ellipsis; }
+.e-tag {
+  font-size: 9px;
+  background: var(--tag);
+  color: var(--tag-fg);
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: .06em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.e-size {
+  color: var(--dim);
+  font-size: 11px;
+  text-align: right;
+}
+.e-modified {
+  color: var(--dim);
+  font-size: 11px;
+  text-align: right;
+}
+.e-sha {
+  color: var(--dim2);
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: .03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* open-in-new tab icon on hover */
+.entry::after {
+  content: '↗';
+  position: absolute;
+  right: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--dim);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity .1s;
+  pointer-events: none;
+}
+.entry:hover::after { opacity: 1; }
+
+/* ── FOOTER / STATUS ── */
+#footer {
+  padding: 14px 32px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: .05em;
+  margin-top: auto;
+}
+#status { transition: color .2s; }
+#status.ok { color: var(--dim); }
+#status.loading { color: #888; }
+#status.err { color: #8a4040; }
+#refresh-btn {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font: 10px var(--ff);
+  cursor: pointer;
+  letter-spacing: .06em;
+  transition: color .15s;
+  padding: 0;
+}
+#refresh-btn:hover { color: var(--fg); }
+
+/* ── EMPTY / ERROR STATES ── */
+#empty {
+  display: none;
+  padding: 60px 32px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--dim2); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  #col-header,
+  .entry {
+    grid-template-columns: 1fr 80px;
+  }
+  .e-idx, .e-size, .e-sha { display: none; }
+  .e-modified { font-size: 10px; }
+  #header { padding: 20px 16px 14px; }
+  #controls, #col-header, .entry, #footer { padding-left: 16px; padding-right: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div>
+    <div id="repo-id">loading…</div>
+    <div id="title">—</div>
+  </div>
+  <div id="meta-right">
+    branch <span id="m-branch">—</span><br>
+    files  <span id="m-count">—</span><br>
+    fetched <span id="m-time">—</span>
+  </div>
+</div>
+
+<div id="controls">
+  <div id="search-wrap">
+    <input id="search" placeholder="filter" autocomplete="off" spellcheck="false">
+  </div>
+  <div id="sort-controls">
+    <button class="sort-btn on" data-sort="name" onclick="setSort('name')">name</button>
+    <button class="sort-btn" data-sort="size" onclick="setSort('size')">size</button>
+    <button class="sort-btn" data-sort="modified" onclick="setSort('modified')">date</button>
+  </div>
+  <div id="count-label"><span id="visible-count">—</span> shown</div>
+</div>
+
+<div id="col-header">
+  <div></div>
+  <div>name</div>
+  <div style="text-align:right">size</div>
+  <div style="text-align:right">modified</div>
+  <div>sha</div>
+</div>
+
+<div id="list"></div>
+<div id="empty">no files match</div>
+
+<div style="flex:1"></div>
+<div id="footer">
+  <span id="status" class="loading">fetching…</span>
+  <button id="refresh-btn" onclick="init(true)">↺ refresh</button>
+</div>
+
+<script>
+'use strict';
+
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+// Auto-detect repo from location. Works on GitHub Pages (user.github.io/repo)
+// and raw.githubusercontent.com. Falls back to a manual override if needed.
+const OVERRIDE_OWNER = '';   // e.g. 'Tucky143'  — leave empty to auto-detect
+const OVERRIDE_REPO  = '';   // e.g. 'Archive'
+const OVERRIDE_BRANCH = '';  // e.g. 'main'       — leave empty to auto-detect
+
+// Tags shown next to filenames when their name contains certain keywords
+const FILE_TAGS = [
+  { test: /hollow.?knight|hk/i,   label: 'HK'      },
+  { test: /neon|void|survivor/i,  label: 'game'     },
+  { test: /launcher/i,            label: 'launcher' },
+  { test: /hub/i,                 label: 'hub'      },
+  { test: /test|demo/i,           label: 'demo'     },
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let _files = [];
+let _sortKey = 'name';
+let _sortDir = 1;
+let _query = '';
+let _owner = '', _repo = '', _branch = '', _baseUrl = '';
+
+// ── DETECT REPO ───────────────────────────────────────────────────────────────
+function detectRepo() {
+  if (OVERRIDE_OWNER && OVERRIDE_REPO) {
+    _owner  = OVERRIDE_OWNER;
+    _repo   = OVERRIDE_REPO;
+    _branch = OVERRIDE_BRANCH || 'main';
+    _baseUrl = `https://${_owner}.github.io/${_repo}/`;
+    return true;
+  }
+  const loc = window.location;
+  // GitHub Pages: <owner>.github.io/<repo>/...
+  const gpMatch = loc.hostname.match(/^([^.]+)\.github\.io$/i);
+  if (gpMatch) {
+    _owner  = gpMatch[1];
+    _repo   = loc.pathname.split('/').filter(Boolean)[0] || '';
+    _branch = OVERRIDE_BRANCH || 'main';
+    _baseUrl = `https://${_owner}.github.io/${_repo}/`;
+    return !!_repo;
+  }
+  // raw.githubusercontent.com/<owner>/<repo>/<branch>/...
+  const rawMatch = loc.hostname.match(/^raw\.githubusercontent\.com$/i);
+  if (rawMatch) {
+    const parts = loc.pathname.split('/').filter(Boolean);
+    _owner  = parts[0] || '';
+    _repo   = parts[1] || '';
+    _branch = parts[2] || 'main';
+    _baseUrl = `https://raw.githubusercontent.com/${_owner}/${_repo}/${_branch}/`;
+    return !!(_owner && _repo);
+  }
+  // Local dev / unknown — try parsing URL segments
+  const parts = loc.pathname.split('/').filter(Boolean);
+  if (parts.length >= 1) {
+    // Assume the page is served from within a repo-like path
+    _owner  = OVERRIDE_OWNER || 'unknown';
+    _repo   = parts[0];
+    _branch = OVERRIDE_BRANCH || 'main';
+    _baseUrl = loc.origin + '/' + _repo + '/';
+    return true;
+  }
+  return false;
+}
+
+// ── GITHUB API ────────────────────────────────────────────────────────────────
+async function fetchFiles(bustCache) {
+  const cacheTTL = 60_000; // 1 min
+  const cacheKey = `idx_${_owner}_${_repo}_${_branch}`;
+  if (!bustCache) {
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      if (raw) {
+        const { ts, data } = JSON.parse(raw);
+        if (Date.now() - ts < cacheTTL) return data;
+      }
+    } catch (_) {}
+  }
+
+  // GitHub Contents API — root of the repo
+  const apiUrl = `https://api.github.com/repos/${_owner}/${_repo}/contents/?ref=${_branch}`;
+  const r = await fetch(apiUrl, {
+    headers: { Accept: 'application/vnd.github.v3+json' }
+  });
+  if (!r.ok) throw new Error(`GitHub API ${r.status}: ${r.statusText}`);
+  const items = await r.json();
+
+  // Filter to root-level .html only, excluding index.html itself
+  const html = items.filter(f =>
+    f.type === 'file' &&
+    f.name.toLowerCase().endsWith('.html') &&
+    f.name.toLowerCase() !== 'index.html'
+  );
+
+  // Fetch last-commit date for each file in parallel (capped at 6 concurrent)
+  const withMeta = await parallelMap(html, 6, async f => {
+    let modified = null;
+    try {
+      const cr = await fetch(
+        `https://api.github.com/repos/${_owner}/${_repo}/commits?path=${encodeURIComponent(f.name)}&per_page=1&sha=${_branch}`,
+        { headers: { Accept: 'application/vnd.github.v3+json' } }
+      );
+      if (cr.ok) {
+        const commits = await cr.json();
+        if (commits[0]) modified = commits[0].commit.committer.date;
+      }
+    } catch (_) {}
+    return { ...f, modified };
+  });
+
+  try { sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: withMeta })); } catch (_) {}
+  return withMeta;
+}
+
+async function parallelMap(arr, concurrency, fn) {
+  const results = new Array(arr.length);
+  const queue = arr.map((item, i) => ({ item, i }));
+  async function worker() {
+    while (queue.length) {
+      const { item, i } = queue.shift();
+      results[i] = await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, arr.length) }, worker));
+  return results;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function fmtSize(bytes) {
+  if (bytes == null) return '—';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(2) + ' MB';
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return diffDays + 'd ago';
+  if (diffDays < 365) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+}
+
+function getTag(name) {
+  for (const { test, label } of FILE_TAGS) if (test.test(name)) return label;
+  return null;
+}
+
+function getFileUrl(f) {
+  // Prefer the html_url for GitHub Pages, otherwise raw download_url
+  return `https://${_owner}.github.io/${_repo}/${f.name}`;
+}
+
+function visibleFiles() {
+  let list = _files.slice();
+  if (_query) {
+    const q = _query.toLowerCase();
+    list = list.filter(f => f.name.toLowerCase().includes(q));
+  }
+  list.sort((a, b) => {
+    let av, bv;
+    if (_sortKey === 'name') { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+    else if (_sortKey === 'size') { av = a.size || 0; bv = b.size || 0; }
+    else { av = a.modified || ''; bv = b.modified || ''; }
+    return av < bv ? -_sortDir : av > bv ? _sortDir : 0;
+  });
+  return list;
+}
+
+function render() {
+  const list = visibleFiles();
+  const container = document.getElementById('list');
+  const empty = document.getElementById('empty');
+  document.getElementById('visible-count').textContent = list.length;
+
+  if (!list.length) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  container.innerHTML = list.map((f, i) => {
+    const tag = getTag(f.name);
+    const url = getFileUrl(f);
+    const sha = f.sha ? f.sha.slice(0, 10) : '—';
+    return `<a class="entry" href="${url}" target="_blank" rel="noopener">
+      <span class="e-idx">${String(i + 1).padStart(2, '0')}</span>
+      <span class="e-name">
+        <span class="e-name-text">${f.name}</span>
+        ${tag ? `<span class="e-tag">${tag}</span>` : ''}
+      </span>
+      <span class="e-size">${fmtSize(f.size)}</span>
+      <span class="e-modified">${fmtDate(f.modified)}</span>
+      <span class="e-sha">${sha}</span>
+    </a>`;
+  }).join('');
+}
+
+// ── SORT / SEARCH ─────────────────────────────────────────────────────────────
+function setSort(key) {
+  if (_sortKey === key) { _sortDir *= -1; }
+  else { _sortKey = key; _sortDir = 1; }
+  document.querySelectorAll('.sort-btn').forEach(b =>
+    b.classList.toggle('on', b.dataset.sort === key)
+  );
+  render();
+}
+
+document.getElementById('search').addEventListener('input', e => {
+  _query = e.target.value.trim();
+  render();
+});
+
+// ── HEADER UPDATER ────────────────────────────────────────────────────────────
+function updateHeader(count) {
+  document.getElementById('repo-id').textContent = `${_owner} / ${_repo}`;
+  document.getElementById('title').textContent = _repo;
+  document.getElementById('m-branch').textContent = _branch;
+  document.getElementById('m-count').textContent = count;
+  document.getElementById('m-time').textContent = new Date().toLocaleTimeString();
+  document.title = _repo + ' · index';
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = cls || '';
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+async function init(bustCache) {
+  setStatus('fetching…', 'loading');
+  if (!detectRepo()) {
+    setStatus('could not detect repo — set OVERRIDE_OWNER / OVERRIDE_REPO at top of file', 'err');
+    return;
+  }
+  try {
+    _files = await fetchFiles(bustCache);
+    updateHeader(_files.length);
+    render();
+    setStatus(`${_files.length} file${_files.length !== 1 ? 's' : ''} · ${_owner}/${_repo}@${_branch}`, 'ok');
+  } catch (e) {
+    setStatus('error: ' + e.message, 'err');
+    document.getElementById('empty').style.display = 'block';
+    document.getElementById('empty').textContent = e.message;
+  }
+}
+
+init(false);
+</script>
+</body>
+</html>
