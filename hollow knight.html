@@ -372,1031 +372,1195 @@
 </div>
 
 <script>
-    'use strict';
+'use strict';
 
-    const SOURCES = [
-      { name:'Default',        base:'https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight' },
-      { name:'Dreamers Fixed', base:'https://cdn.jsdelivr.net/gh/HorizonOfficia/hollow-knight@main' },
-      { name:'Original',       base:'https://cdn.jsdelivr.net/gh/aukak/hollow-knight@main' },
-      { name:'Performant',     base:'https://cdn.jsdelivr.net/gh/kararh0916/hollow-knight@main' },
-    ];
+// ═══════════════════════════════════════════════════════════════
+//  SOURCES
+// ═══════════════════════════════════════════════════════════════
+const SOURCES = [
+  { name:'Default',        base:'https://cdn.jsdelivr.net/gh/Tucky143/Archive@latest/Hollow%20Knight' },
+  { name:'Dreamers Fixed', base:'https://cdn.jsdelivr.net/gh/HorizonOfficia/hollow-knight@main' },
+  { name:'Original',       base:'https://cdn.jsdelivr.net/gh/aukak/hollow-knight@main' },
+  { name:'Performant',     base:'https://cdn.jsdelivr.net/gh/kararh0916/hollow-knight@main' },
+];
 
-    const RAW_FALLBACKS = {
-      'StreamingAssets/FinalE.mp4': 'https://raw.githubusercontent.com/Tucky143/Archive/main/Hollow%20Knight/StreamingAssets/FinalE.mp4',
+const RAW_FALLBACKS = {
+  'StreamingAssets/FinalE.mp4': 'https://raw.githubusercontent.com/Tucky143/Archive/main/Hollow%20Knight/StreamingAssets/FinalE.mp4',
+};
+
+let _srcIdx = 0;
+const cdnBase  = () => SOURCES[_srcIdx].base;
+const cdnUrl   = p  => cdnBase() + '/' + p;
+const resolveUrl = p => RAW_FALLBACKS[p] || cdnUrl(p);
+
+// ═══════════════════════════════════════════════════════════════
+//  MASTER IDB  — one database for everything except Unity's /idbfs
+//  Stores:
+//    'cfg'    key:'config'          → settings object
+//    'slots'  key:'slots'           → {slots:[…], active:N}
+//    'files'  key:path (asset cache)→ {path, buf, src, ts}
+//    'saves'  key:slotIndex (0-7)   → {idx, data:[…], ts}
+// ═══════════════════════════════════════════════════════════════
+const MDB_NAME    = 'hk_master_v1';
+const MDB_VERSION = 1;
+let _mdb = null;
+
+function openMDB() {
+  if (_mdb) return Promise.resolve(_mdb);
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(MDB_NAME, MDB_VERSION);
+    r.onerror = () => rej(r.error);
+    r.onsuccess = () => { _mdb = r.result; res(_mdb); };
+    r.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('cfg'))   db.createObjectStore('cfg',   { keyPath: 'k' });
+      if (!db.objectStoreNames.contains('slots'))  db.createObjectStore('slots',  { keyPath: 'k' });
+      if (!db.objectStoreNames.contains('files'))  db.createObjectStore('files',  { keyPath: 'path' });
+      if (!db.objectStoreNames.contains('saves'))  db.createObjectStore('saves',  { keyPath: 'idx' });
     };
+  });
+}
 
-    let _srcIdx = 0;
-    try { _srcIdx = Math.max(0,Math.min(SOURCES.length-1,parseInt(localStorage.getItem('hk_src_idx')||'0',10)||0)); } catch(e){}
-    const cdnBase = () => SOURCES[_srcIdx].base;
-    const cdnUrl  = p  => cdnBase()+'/'+p;
-    const resolveUrl = p => RAW_FALLBACKS[p] || cdnUrl(p);
+// Generic helpers
+function mdbGet(store, key) {
+  return openMDB().then(db => new Promise((res, rej) => {
+    const r = db.transaction(store, 'readonly').objectStore(store).get(key);
+    r.onsuccess = () => res(r.result || null);
+    r.onerror   = () => rej(r.error);
+  }));
+}
+function mdbPut(store, value) {
+  return openMDB().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).put(value);
+    tx.oncomplete = res;
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+function mdbDelete(store, key) {
+  return openMDB().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(key);
+    tx.oncomplete = res;
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+function mdbClear(store) {
+  return openMDB().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).clear();
+    tx.oncomplete = res;
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+function mdbCount(store, key) {
+  return openMDB().then(db => new Promise((res, rej) => {
+    const r = db.transaction(store, 'readonly').objectStore(store).count(key);
+    r.onsuccess = () => res(r.result);
+    r.onerror   = () => rej(r.error);
+  }));
+}
 
-    function switchSource(idx){
-      if(idx===_srcIdx) return;
-      _srcIdx=idx;
-      try{localStorage.setItem('hk_src_idx',String(idx));}catch(e){}
-      updateSourceUI();
-      mlog('Source → '+SOURCES[idx].name,'hi');
-      clearCache().then(()=>{mlog('Cache cleared. Reloading…','warn');setTimeout(reloadGame,800);});
-    }
-    function updateSourceUI(){
-      SOURCES.forEach((s,i)=>{
-        const btn=document.getElementById('src-'+i);
-        if(btn) btn.classList.toggle('active',i===_srcIdx);
+// ═══════════════════════════════════════════════════════════════
+//  CONFIG  (replaces localStorage for settings)
+// ═══════════════════════════════════════════════════════════════
+const DEF = {
+  resolution:5, dpiScale:1.0, memory:256,
+  antialias:false, depth:true, stencil:false, preserveDrawingBuffer:false, desynchronized:true,
+  powerPreference:'high-performance',
+  shadows:true, shadowQuality:1, softShadows:false,
+  bloom:true, bloomIntensity:0.3, vignette:true, colorGrading:true, motionBlur:false, disablePostFX:false,
+  textureQuality:2, anisotropicFiltering:false, normalMaps:true,
+  fpsCap:0, framePacing:false, simd:true,
+  captureAllKeyboardInput:true, stickyCursorLock:true,
+  disableParticles:false, particleBudget:512,
+  preset:'medium', deadzone:10,
+  remap:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
+  srcIdx:0,
+};
+let C = { ...DEF };
+
+async function cfgLoad() {
+  try {
+    const row = await mdbGet('cfg', 'config');
+    if (row && row.v) C = { ...DEF, ...row.v };
+    _srcIdx = Math.max(0, Math.min(SOURCES.length - 1, C.srcIdx || 0));
+  } catch(e) {}
+}
+async function cfgSave() {
+  C.srcIdx = _srcIdx;
+  try { await mdbPut('cfg', { k:'config', v:C }); } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SOURCE
+// ═══════════════════════════════════════════════════════════════
+async function switchSource(idx) {
+  if (idx === _srcIdx) return;
+  _srcIdx = idx;
+  await cfgSave();
+  updateSourceUI();
+  mlog('Source → ' + SOURCES[idx].name, 'hi');
+  await clearCache();
+  mlog('Cache cleared. Reloading…', 'warn');
+  setTimeout(reloadGame, 800);
+}
+function updateSourceUI() {
+  SOURCES.forEach((s, i) => {
+    const btn = document.getElementById('src-' + i);
+    if (btn) btn.classList.toggle('active', i === _srcIdx);
+  });
+  const en = document.getElementById('src-active-name');
+  const eu = document.getElementById('src-active-url');
+  if (en) en.textContent = SOURCES[_srcIdx].name;
+  if (eu) eu.textContent = SOURCES[_srcIdx].base.replace('https://cdn.jsdelivr.net/gh/','');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AUDIO POOL
+// ═══════════════════════════════════════════════════════════════
+(()=>{
+  const SZ=48,pool=[],used=new WeakSet();
+  for(let i=0;i<SZ;i++){const e=document.createElement('audio');e.preload='none';pool.push(e);}
+  const get=()=>{
+    for(const e of pool)if(!used.has(e)&&e.paused&&e.readyState===0)return e;
+    for(const e of pool)if(e.paused){e.pause();e.src='';e.load();used.delete(e);return e;}
+    pool[0].pause();pool[0].src='';pool[0].load();used.delete(pool[0]);return pool[0];
+  };
+  const NA=window.Audio;
+  window.Audio=function(src){const e=get();used.add(e);if(src)e.src=src;return e;};
+  Object.assign(window.Audio,NA||{});
+  const nCE=document.createElement.bind(document);
+  document.createElement=(t,...a)=>{
+    if(typeof t==='string'&&t.toLowerCase()==='audio'){const e=get();used.add(e);return e;}
+    return nCE(t,...a);
+  };
+  for(const e of pool){
+    e.addEventListener('ended',()=>used.delete(e));
+    e.addEventListener('error',()=>{e.src='';used.delete(e);});
+    e.addEventListener('emptied',()=>used.delete(e));
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════
+//  XHR THROTTLE
+// ═══════════════════════════════════════════════════════════════
+(()=>{
+  const _X=window.XMLHttpRequest,Q=[],CON=3,DELAY=100;
+  let act=0;
+  const drain=()=>{if(act>=CON||!Q.length)return;act++;Q.shift()();};
+  window.XMLHttpRequest=function(){
+    const xhr=new _X(),_o=xhr.open.bind(xhr),_s=xhr.send.bind(xhr);
+    let stream=false,oa;
+    xhr.open=(...a)=>{stream=/sharedassets|resources\.resource|\.assets/.test(a[1]||'');oa=a;if(!stream)_o(...a);};
+    xhr.send=b=>{
+      if(!stream){_s(b);return;}
+      Q.push(()=>{
+        _o(...oa);
+        const done=()=>{act--;setTimeout(drain,DELAY);};
+        const ol=xhr.onload,oe=xhr.onerror;
+        xhr.onload=e=>{done();ol&&ol.call(xhr,e);};
+        xhr.onerror=e=>{done();oe&&oe.call(xhr,e);};
+        _s(b);
       });
-      const en=document.getElementById('src-active-name');
-      const eu=document.getElementById('src-active-url');
-      if(en) en.textContent=SOURCES[_srcIdx].name;
-      if(eu) eu.textContent=SOURCES[_srcIdx].base.replace('https://cdn.jsdelivr.net/gh/','');
-    }
+      drain();
+    };
+    return xhr;
+  };
+  Object.assign(window.XMLHttpRequest,_X);
+})();
 
-    (()=>{
-      const SZ=48,pool=[],used=new WeakSet();
-      for(let i=0;i<SZ;i++){const e=document.createElement('audio');e.preload='none';pool.push(e);}
-      const get=()=>{
-        for(const e of pool) if(!used.has(e)&&e.paused&&e.readyState===0) return e;
-        for(const e of pool) if(e.paused){e.pause();e.src='';e.load();used.delete(e);return e;}
-        pool[0].pause();pool[0].src='';pool[0].load();used.delete(pool[0]);return pool[0];
-      };
-      const NA=window.Audio;
-      window.Audio=function(src){const e=get();used.add(e);if(src)e.src=src;return e;};
-      Object.assign(window.Audio,NA||{});
-      const nCE=document.createElement.bind(document);
-      document.createElement=(t,...a)=>{
-        if(typeof t==='string'&&t.toLowerCase()==='audio'){const e=get();used.add(e);return e;}
-        return nCE(t,...a);
-      };
-      for(const e of pool){
-        e.addEventListener('ended',()=>used.delete(e));
-        e.addEventListener('error',()=>{e.src='';used.delete(e);});
-        e.addEventListener('emptied',()=>used.delete(e));
+window.addEventListener('beforeunload', e => { e.preventDefault(); e.returnValue=''; });
+
+// ═══════════════════════════════════════════════════════════════
+//  PRESETS
+// ═══════════════════════════════════════════════════════════════
+const RES=[
+  {v:.10,l:'10%'},{v:.17,l:'17%'},{v:.25,l:'25%'},{v:.33,l:'33%'},
+  {v:.42,l:'42%'},{v:.50,l:'50%'},{v:.60,l:'60%'},{v:.75,l:'75%'},{v:1,l:'100%'}
+];
+const BTN_LABELS=['A','B','X','Y','LB','RB','SL','SR','↩','▶','LS','RS','↑','↓','←','→','⊙'];
+
+const PRESETS={
+  potato: {resolution:0,dpiScale:.4,memory:64,antialias:false,depth:false,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
+  minimal:{resolution:1,dpiScale:.5,memory:128,antialias:false,depth:false,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
+  superlow:{resolution:2,dpiScale:.75,memory:128,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:1,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:false,particleBudget:256},
+  cbsafe: {resolution:3,dpiScale:1,memory:192,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:256},
+  low:    {resolution:3,dpiScale:.75,memory:192,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:true,shadowQuality:0,softShadows:false,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:256},
+  medium: {resolution:5,dpiScale:1,memory:256,antialias:false,depth:true,desynchronized:true,powerPreference:'high-performance',shadows:true,shadowQuality:1,softShadows:false,bloom:true,bloomIntensity:.3,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:2,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:512},
+  high:   {resolution:7,dpiScale:1,memory:384,antialias:false,depth:true,desynchronized:true,powerPreference:'high-performance',shadows:true,shadowQuality:2,softShadows:true,bloom:true,bloomIntensity:.4,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:3,anisotropicFiltering:true,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:1024},
+};
+
+function applyPreset(n) {
+  if (!PRESETS[n]) return;
+  Object.assign(C, PRESETS[n], { preset:n });
+  cfgSave(); syncUI(); applyRes();
+  mlog('Preset: ' + n, 'hi');
+}
+
+async function autoOptimize() {
+  mlog('Benchmarking…', 'hi');
+  let s = 0;
+  s += Math.min(navigator.hardwareConcurrency || 2, 16) * 3;
+  s += Math.min(navigator.deviceMemory || 1, 8) * 5;
+  const cvt = document.createElement('canvas');
+  const gl = cvt.getContext('webgl') || cvt.getContext('experimental-webgl');
+  if (gl) {
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    if (ext) {
+      const r = (gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
+      document.getElementById('inf-gpu').textContent = r.substring(0,28) || 'unknown';
+      if (/m[34]\s*(pro|max|ultra)|rtx\s*[4-9]/.test(r))     s += 60;
+      else if (/m[12]\s*(pro|max)|rtx\s*[23]/.test(r))        s += 40;
+      else if (/rtx\s*1|gtx\s*16|m1(?!\s)/.test(r))           s += 25;
+      else if (/gtx\s*[89]00|gtx\s*10/.test(r))               s += 15;
+      else if (/celeron|n40[0-9]{2}|n30[0-9]{2}/.test(r))     s += 2;
+      else if (/intel\s*(uhd|hd)/.test(r))                    s += 4;
+      else                                                      s += 10;
+    }
+  }
+  const t0 = performance.now(); let x = 0;
+  for (let i = 0; i < 4e6; i++) x = Math.sqrt(i * 1.0001 + x);
+  const el = performance.now() - t0;
+  s += el<30?20:el<60?12:el<120?5:1;
+  if (/Android|iPhone|iPad/.test(navigator.userAgent)) s = Math.floor(s * .5);
+  if (/CrOS/.test(navigator.userAgent)) s = Math.min(s, 22);
+  const chosen = s>=55?'high':s>=35?'medium':s>=20?'low':s>=12?'cbsafe':s>=6?'superlow':'potato';
+  mlog('Score ' + s + ' → ' + chosen, 'ok');
+  applyPreset(chosen);
+}
+
+const _blobUrls = new Set();
+function turboGC() { _blobUrls.forEach(u => URL.revokeObjectURL(u)); _blobUrls.clear(); mlog('Blobs revoked','ok'); }
+
+function syncUI() {
+  document.querySelectorAll('.qb').forEach(b => b.classList.toggle('on', b.dataset.q === C.preset));
+  document.getElementById('inf-cores').textContent = navigator.hardwareConcurrency || '?';
+  document.getElementById('inf-ram').textContent   = (navigator.deviceMemory || '?') + ' GB';
+  document.getElementById('inf-pre').textContent   = C.preset || 'custom';
+  const dzsl = document.getElementById('dz-sl');
+  if (dzsl) { dzsl.value = C.deadzone; document.getElementById('dz-v').textContent = C.deadzone + '%'; }
+  renderRemapRows();
+  renderSlotList();
+  updateSourceUI();
+}
+
+let cv = document.getElementById('unity-canvas');
+const hkv = document.getElementById('hkv');
+let unityInstance = null;
+
+function tab(n) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.t === n));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'page-' + n));
+}
+function togglePanel() {
+  const p = document.getElementById('panel');
+  p.classList.toggle('open');
+  document.getElementById('handle').classList.toggle('open', p.classList.contains('open'));
+  if (!p.classList.contains('open')) cv.focus();
+}
+
+document.getElementById('panel').addEventListener('focusin', e => {
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+    if (unityInstance) { try { unityInstance.SendMessage('Input','captureAllKeyboardInput','false'); } catch(_){} }
+  }
+}, true);
+document.getElementById('panel').addEventListener('focusout', e => {
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+    if (unityInstance) { try { unityInstance.SendMessage('Input','captureAllKeyboardInput','true'); } catch(_){} }
+  }
+}, true);
+
+// Console capture
+(()=>{
+  const levels = {log:'log',warn:'warn',error:'err',info:'info',debug:'debug'};
+  for (const [lvl,cls] of Object.entries(levels)) {
+    const orig = console[lvl].bind(console);
+    console[lvl] = (...args) => {
+      orig(...args);
+      const msg = args.map(a => typeof a==='string'?a:JSON.stringify(a)).join(' ');
+      if (lvl==='log') {
+        const m = msg.match(/(?:Started|Playing)\s+cinematic\s+'?(\w+)'?/i);
+        if (m && csState==='idle') csPlay(m[1]);
+        if (/Stopped\s+cinematic/i.test(msg)) { hkv.style.display='none'; hkv.pause(); csState='idle'; }
       }
-    })();
-
-    (()=>{
-      const _X=window.XMLHttpRequest,Q=[],CON=3,DELAY=100;
-      let act=0;
-      const drain=()=>{if(act>=CON||!Q.length)return;act++;Q.shift()();};
-      window.XMLHttpRequest=function(){
-        const xhr=new _X(),_o=xhr.open.bind(xhr),_s=xhr.send.bind(xhr);
-        let stream=false,oa;
-        xhr.open=(...a)=>{stream=/sharedassets|resources\.resource|\.assets/.test(a[1]||'');oa=a;if(!stream)_o(...a);};
-        xhr.send=b=>{
-          if(!stream){_s(b);return;}
-          Q.push(()=>{
-            _o(...oa);
-            const done=()=>{act--;setTimeout(drain,DELAY);};
-            const ol=xhr.onload,oe=xhr.onerror;
-            xhr.onload=e=>{done();ol&&ol.call(xhr,e);};
-            xhr.onerror=e=>{done();oe&&oe.call(xhr,e);};
-            _s(b);
-          });
-          drain();
-        };
-        return xhr;
-      };
-      Object.assign(window.XMLHttpRequest,_X);
-    })();
-
-    window.addEventListener('beforeunload',e=>{e.preventDefault();e.returnValue='';});
-
-    const SK='hk_cfg_v6';
-    const DEF={
-      resolution:5,dpiScale:1.0,memory:256,
-      antialias:false,depth:true,stencil:false,preserveDrawingBuffer:false,desynchronized:true,
-      powerPreference:'high-performance',
-      shadows:true,shadowQuality:1,softShadows:false,
-      bloom:true,bloomIntensity:0.3,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,
-      textureQuality:2,anisotropicFiltering:false,normalMaps:true,
-      fpsCap:0,framePacing:false,simd:true,
-      captureAllKeyboardInput:true,stickyCursorLock:true,
-      disableParticles:false,particleBudget:512,
-      preset:'medium',deadzone:10,
-      remap:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
+      mlog(msg, cls);
     };
-    let C={...DEF};
-    const cfgLoad=()=>{try{const s=localStorage.getItem(SK);if(s)C={...DEF,...JSON.parse(s)};}catch(e){}};
-    const cfgSave=()=>{try{localStorage.setItem(SK,JSON.stringify(C));}catch(e){}};
+  }
+})();
 
-    const RES=[
-      {v:.10,l:'10%'},{v:.17,l:'17%'},{v:.25,l:'25%'},{v:.33,l:'33%'},
-      {v:.42,l:'42%'},{v:.50,l:'50%'},{v:.60,l:'60%'},{v:.75,l:'75%'},{v:1,l:'100%'}
-    ];
-    const BTN_LABELS=['A','B','X','Y','LB','RB','SL','SR','↩','▶','LS','RS','↑','↓','←','→','⊙'];
+const mlog = (msg, cls='log') => {
+  const el = document.getElementById('mlog');
+  const d  = document.createElement('div');
+  d.className = 'll ' + cls;
+  const t = new Date();
+  d.textContent = String(t.getMinutes()).padStart(2,'0') + ':' + String(t.getSeconds()).padStart(2,'0') + ' ' + msg;
+  el.appendChild(d); el.scrollTop = el.scrollHeight;
+  if (el.childNodes.length > 300) el.removeChild(el.firstChild);
+};
+const clearLog = () => document.getElementById('mlog').innerHTML = '';
 
-    const PRESETS={
-      potato: {resolution:0,dpiScale:.4,memory:64,antialias:false,depth:false,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
-      minimal:{resolution:1,dpiScale:.5,memory:128,antialias:false,depth:false,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:0,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:true,particleBudget:64},
-      superlow:{resolution:2,dpiScale:.75,memory:128,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:false,colorGrading:false,motionBlur:false,disablePostFX:true,textureQuality:1,anisotropicFiltering:false,normalMaps:false,fpsCap:0,disableParticles:false,particleBudget:256},
-      cbsafe: {resolution:3,dpiScale:1,memory:192,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:false,shadowQuality:0,softShadows:false,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:256},
-      low:    {resolution:3,dpiScale:.75,memory:192,antialias:false,depth:true,desynchronized:true,powerPreference:'default',shadows:true,shadowQuality:0,softShadows:false,bloom:false,vignette:true,colorGrading:false,motionBlur:false,disablePostFX:false,textureQuality:1,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:256},
-      medium: {resolution:5,dpiScale:1,memory:256,antialias:false,depth:true,desynchronized:true,powerPreference:'high-performance',shadows:true,shadowQuality:1,softShadows:false,bloom:true,bloomIntensity:.3,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:2,anisotropicFiltering:false,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:512},
-      high:   {resolution:7,dpiScale:1,memory:384,antialias:false,depth:true,desynchronized:true,powerPreference:'high-performance',shadows:true,shadowQuality:2,softShadows:true,bloom:true,bloomIntensity:.4,vignette:true,colorGrading:true,motionBlur:false,disablePostFX:false,textureQuality:3,anisotropicFiltering:true,normalMaps:true,fpsCap:0,disableParticles:false,particleBudget:1024},
-    };
+function conSend() {
+  const inp = document.getElementById('con-inp');
+  const txt = inp.value.trim(); if (!txt) return;
+  mlog('> ' + txt, 'hi'); inp.value = '';
+  const sm = txt.match(/^(\S+)\s*\/\s*(\S+)(?:\s*\/\s*(.*))?$/);
+  if (sm && unityInstance) {
+    try { unityInstance.SendMessage(sm[1], sm[2], sm[3]||''); mlog('SendMessage OK','ok'); }
+    catch(e) { mlog('SendMessage err: '+e.message,'err'); }
+    return;
+  }
+  try { const res = eval(txt); if (res !== undefined) mlog(String(res),'ok'); }
+  catch(e) { mlog(e.message,'err'); }
+}
 
-    function applyPreset(n){
-      if(!PRESETS[n]) return;
-      Object.assign(C,PRESETS[n],{preset:n});
-      cfgSave(); syncUI(); applyRes();
-      mlog('Preset: '+n,'hi');
+function applyRes() {
+  const idx = Math.min(C.resolution, RES.length - 1);
+  const s   = RES[idx].v;
+  cv.width  = Math.round(window.innerWidth  * s * (C.dpiScale||1));
+  cv.height = Math.round(window.innerHeight * s * (C.dpiScale||1));
+  cv.style.cssText = 'position:absolute;top:0;left:0;width:100vw;height:100vh;image-rendering:' + (s<.6?'pixelated':'auto');
+}
+window.addEventListener('resize', applyRes);
+
+setInterval(() => {
+  const m = performance.memory; if (!m) return;
+  document.getElementById('inf-heap').textContent = Math.round(m.usedJSHeapSize/1048576) + ' MB';
+}, 3000);
+
+// ═══════════════════════════════════════════════════════════════
+//  ASSET CACHE  (uses 'files' store in master IDB)
+// ═══════════════════════════════════════════════════════════════
+const getCached  = path => mdbGet('files', path);
+const putCached  = (path, buf) => mdbPut('files', { path, buf, src:_srcIdx, ts:Date.now() });
+const hasCached  = path => mdbCount('files', path).then(n => n > 0);
+
+const setPill = (txt, cls) => {
+  const p = document.getElementById('pill');
+  p.textContent = txt; p.className = cls;
+};
+
+async function clearCache() {
+  try {
+    await mdbClear('files');
+    setPill('○ not cached', '');
+    const sc = document.getElementById('src-cache-state');
+    const ic = document.getElementById('inf-cache');
+    if (sc) sc.textContent = 'None';
+    if (ic) ic.textContent = 'None';
+    mlog('Cache cleared', 'ok');
+  } catch(e) { mlog('Cache clear failed: '+e.message,'err'); }
+}
+
+const TOTAL_MB = 912.81;
+let _lb = 0, _te = TOTAL_MB * 1048576;
+
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(input, options) {
+  const url = typeof input==='string' ? input : (input&&input.url ? input.url : String(input));
+  let matchedPath = null;
+  for (const s of SOURCES) {
+    const base = s.base + '/';
+    if (url.startsWith(base)) { matchedPath = decodeURIComponent(url.slice(base.length).split('?')[0]); break; }
+  }
+  if (!matchedPath) {
+    for (const [path,rawUrl] of Object.entries(RAW_FALLBACKS)) {
+      if (url === rawUrl) { matchedPath = path; break; }
     }
+  }
+  if (matchedPath) {
+    try {
+      const hit = await getCached(matchedPath);
+      if (hit && hit.buf) {
+        _lb += hit.buf.byteLength;
+        return new Response(hit.buf, { status:200, headers:{ 'Content-Type':'application/octet-stream','X-Cache':'HIT' }});
+      }
+    } catch(e) {}
+  }
+  return _origFetch(input, options);
+};
 
-    async function autoOptimize(){
-      mlog('Benchmarking…','hi');
-      let s=0;
-      s+=Math.min(navigator.hardwareConcurrency||2,16)*3;
-      s+=Math.min(navigator.deviceMemory||1,8)*5;
-      const cvt=document.createElement('canvas');
-      const gl=cvt.getContext('webgl')||cvt.getContext('experimental-webgl');
-      if(gl){
-        const ext=gl.getExtension('WEBGL_debug_renderer_info');
-        if(ext){
-          const r=(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)||'').toLowerCase();
-          document.getElementById('inf-gpu').textContent=r.substring(0,28)||'unknown';
-          if(/m[34]\s*(pro|max|ultra)|rtx\s*[4-9]/.test(r))     s+=60;
-          else if(/m[12]\s*(pro|max)|rtx\s*[23]/.test(r))        s+=40;
-          else if(/rtx\s*1|gtx\s*16|m1(?!\s)/.test(r))           s+=25;
-          else if(/gtx\s*[89]00|gtx\s*10/.test(r))               s+=15;
-          else if(/celeron|n40[0-9]{2}|n30[0-9]{2}/.test(r))     s+=2;
-          else if(/intel\s*(uhd|hd)/.test(r))                    s+=4;
-          else                                                     s+=10;
+async function fetchWithProgress(path) {
+  const url = resolveUrl(path);
+  try {
+    const hit = await getCached(path);
+    if (hit && hit.buf) { _lb += hit.buf.byteLength; updateBootProgress(); return hit.buf; }
+  } catch(e) {}
+  const resp = await _origFetch(url);
+  if (!resp.ok) throw new Error('HTTP ' + resp.status + ': ' + url);
+  const reader = resp.body.getReader();
+  const chunks = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    _lb += value.length; chunks.push(value); updateBootProgress();
+  }
+  const total = chunks.reduce((a,c) => a+c.length, 0);
+  const buf   = new Uint8Array(total);
+  let off = 0; for (const c of chunks) { buf.set(c,off); off+=c.length; }
+  putCached(path, buf.buffer).catch(()=>{});
+  return buf.buffer;
+}
+
+function updateBootProgress() {
+  const v    = Math.min(100, Math.round(_lb / _te * 100));
+  const fill = document.getElementById('ls-fill') || document.getElementById('rld-fill');
+  const pct  = document.getElementById('ls-pct')  || document.getElementById('rld-pct');
+  if (fill) fill.style.width = v + '%';
+  if (pct)  pct.textContent  = v + '%';
+  const mb  = (_lb/1048576).toFixed(1);
+  const sub = document.getElementById('ls-sub') || document.getElementById('rld-sub');
+  if (sub) sub.textContent = mb + ' / ' + TOTAL_MB + ' MB';
+}
+
+async function fetchPartsParallel(base, from, to) {
+  const paths = Array.from({length: to-from+1}, (_,i) => base+'.part'+(from+i));
+  const q     = paths.map((p,i) => ({p,i}));
+  const bufs  = new Array(paths.length);
+  await Promise.all(Array.from({length:4}, async () => {
+    while (q.length) { const {p,i} = q.shift(); bufs[i] = await fetchWithProgress(p); }
+  }));
+  const total = bufs.reduce((a,b) => a+b.byteLength, 0);
+  const out   = new Uint8Array(total); let off=0;
+  for (const b of bufs) { out.set(new Uint8Array(b), off); off+=b.byteLength; }
+  return out.buffer;
+}
+
+async function autoCacheAll() {
+  mlog('Background cache starting…','info');
+  setPill('↓ caching…','caching');
+  let cached=0, skipped=0, failed=0;
+  const fetchAndCacheOne = async path => {
+    try {
+      const already = await hasCached(path);
+      if (already) { skipped++; return; }
+      const url  = resolveUrl(path);
+      const resp = await _origFetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const buf  = await resp.arrayBuffer();
+      await putCached(path, buf);
+      cached++;
+    } catch(e) { failed++; mlog('Fetch fail: '+path+' — '+e.message,'warn'); }
+  };
+  for (const f of ['RuntimeInitializeOnLoads.json','ScriptingAssemblies.json']) await fetchAndCacheOne(f);
+  const buildParts = [];
+  for (let i=1;i<=45;i++) buildParts.push('Build/hktruffled.data.part'+i);
+  for (let i=1;i<=2;i++)  buildParts.push('Build/hktruffled.wasm.part'+i);
+  buildParts.push('Build/hktruffled.framework.js','Build/hktruffled.loader.js');
+  for (const f of buildParts) await fetchAndCacheOne(f);
+  const knownSA = Object.keys(CMAP);
+  for (const name of knownSA) { const path = CMAP[name]; await fetchAndCacheOne(path); }
+  for (const zipName of ['HK_Assets.zip','HK_Resources.zip']) {
+    mlog('Fetching '+zipName+'…','info');
+    setPill('↓ '+zipName+'…','caching');
+    try {
+      const zipUrl = cdnUrl(zipName);
+      let totalBytes = 0;
+      try { const head = await _origFetch(zipUrl,{method:'HEAD'}); totalBytes = parseInt(head.headers.get('content-length')||'0',10)||0; } catch(_){}
+      let zipBuf;
+      if (totalBytes > 0) {
+        const CHUNK = 8*1024*1024; const chunks = [];
+        for (let start=0; start<totalBytes; start+=CHUNK) {
+          const end = Math.min(start+CHUNK-1, totalBytes-1);
+          const r   = await _origFetch(zipUrl, {headers:{Range:'bytes='+start+'-'+end}});
+          if (!r.ok && r.status!==206) throw new Error('Range fetch HTTP '+r.status);
+          chunks.push(await r.arrayBuffer());
         }
+        const total    = chunks.reduce((a,b)=>a+b.byteLength,0);
+        const assembled = new Uint8Array(total);
+        let off=0; for(const c of chunks){assembled.set(new Uint8Array(c),off);off+=c.byteLength;}
+        zipBuf = assembled.buffer;
+      } else {
+        const r = await _origFetch(zipUrl);
+        if (!r.ok) throw new Error('HTTP '+r.status+': '+zipName);
+        zipBuf = await r.arrayBuffer();
       }
-      const t0=performance.now();let x=0;
-      for(let i=0;i<4e6;i++) x=Math.sqrt(i*1.0001+x);
-      const el=performance.now()-t0;
-      s+=el<30?20:el<60?12:el<120?5:1;
-      if(/Android|iPhone|iPad/.test(navigator.userAgent)) s=Math.floor(s*.5);
-      if(/CrOS/.test(navigator.userAgent)) s=Math.min(s,22);
-      const chosen=s>=55?'high':s>=35?'medium':s>=20?'low':s>=12?'cbsafe':s>=6?'superlow':'potato';
-      mlog('Score '+s+' → '+chosen,'ok');
-      applyPreset(chosen);
-    }
-
-    const _blobUrls=new Set();
-    function turboGC(){_blobUrls.forEach(u=>URL.revokeObjectURL(u));_blobUrls.clear();mlog('Blobs revoked','ok');}
-
-    function syncUI(){
-      document.querySelectorAll('.qb').forEach(b=>b.classList.toggle('on',b.dataset.q===C.preset));
-      document.getElementById('inf-cores').textContent=navigator.hardwareConcurrency||'?';
-      document.getElementById('inf-ram').textContent=(navigator.deviceMemory||'?')+' GB';
-      document.getElementById('inf-pre').textContent=C.preset||'custom';
-      const dzsl=document.getElementById('dz-sl');
-      if(dzsl){dzsl.value=C.deadzone;document.getElementById('dz-v').textContent=C.deadzone+'%';}
-      renderRemapRows();
-      renderSlotList();
-      updateSourceUI();
-    }
-
-    let cv=document.getElementById('unity-canvas');
-    const hkv=document.getElementById('hkv');
-    let unityInstance=null;
-
-    function tab(n){
-      document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.t===n));
-      document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='page-'+n));
-    }
-    function togglePanel(){
-      const p=document.getElementById('panel');
-      p.classList.toggle('open');
-      document.getElementById('handle').classList.toggle('open',p.classList.contains('open'));
-      if(!p.classList.contains('open')) cv.focus();
-    }
-
-    document.getElementById('panel').addEventListener('focusin', e => {
-      const tag = e.target && e.target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-        if (unityInstance) { try { unityInstance.SendMessage('Input', 'captureAllKeyboardInput', 'false'); } catch(_) {} }
-      }
-    }, true);
-    document.getElementById('panel').addEventListener('focusout', e => {
-      const tag = e.target && e.target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-        if (unityInstance) { try { unityInstance.SendMessage('Input', 'captureAllKeyboardInput', 'true'); } catch(_) {} }
-      }
-    }, true);
-
-    (()=>{
-      const levels={log:'log',warn:'warn',error:'err',info:'info',debug:'debug'};
-      for(const[lvl,cls]of Object.entries(levels)){
-        const orig=console[lvl].bind(console);
-        console[lvl]=(...args)=>{
-          orig(...args);
-          const msg=args.map(a=>typeof a==='string'?a:JSON.stringify(a)).join(' ');
-          if(lvl==='log'){
-            const m=msg.match(/(?:Started|Playing)\s+cinematic\s+'?(\w+)'?/i);
-            if(m&&csState==='idle') csPlay(m[1]);
-            if(/Stopped\s+cinematic/i.test(msg)){hkv.style.display='none';hkv.pause();csState='idle';}
-          }
-          mlog(msg,cls);
-        };
-      }
-    })();
-
-    const mlog=(msg,cls='log')=>{
-      const el=document.getElementById('mlog');
-      const d=document.createElement('div');
-      d.className='ll '+cls;
-      const t=new Date();
-      d.textContent=String(t.getMinutes()).padStart(2,'0')+':'+String(t.getSeconds()).padStart(2,'0')+' '+msg;
-      el.appendChild(d);el.scrollTop=el.scrollHeight;
-      if(el.childNodes.length>300) el.removeChild(el.firstChild);
-    };
-    const clearLog=()=>document.getElementById('mlog').innerHTML='';
-
-    function conSend(){
-      const inp=document.getElementById('con-inp');
-      const txt=inp.value.trim();if(!txt)return;
-      mlog('> '+txt,'hi');inp.value='';
-      const sm=txt.match(/^(\S+)\s*\/\s*(\S+)(?:\s*\/\s*(.*))?$/);
-      if(sm&&unityInstance){
-        try{unityInstance.SendMessage(sm[1],sm[2],sm[3]||'');mlog('SendMessage OK','ok');}
-        catch(e){mlog('SendMessage err: '+e.message,'err');}
-        return;
-      }
-      try{const res=eval(txt);if(res!==undefined)mlog(String(res),'ok');}
-      catch(e){mlog(e.message,'err');}
-    }
-
-    function applyRes(){
-      const idx=Math.min(C.resolution,RES.length-1);
-      const s=RES[idx].v;
-      cv.width=Math.round(window.innerWidth*s*(C.dpiScale||1));
-      cv.height=Math.round(window.innerHeight*s*(C.dpiScale||1));
-      cv.style.cssText='position:absolute;top:0;left:0;width:100vw;height:100vh;image-rendering:'+(s<.6?'pixelated':'auto');
-    }
-    window.addEventListener('resize',applyRes);
-
-    setInterval(()=>{
-      const m=performance.memory;if(!m)return;
-      document.getElementById('inf-heap').textContent=Math.round(m.usedJSHeapSize/1048576)+' MB';
-    },3000);
-
-    const CDB='hk_cache_v4',CST='files';
-    let _cdb=null;
-
-    const openCDB=()=>{
-      if(_cdb) return Promise.resolve(_cdb);
-      return new Promise((res,rej)=>{
-        const r=indexedDB.open(CDB,1);
-        r.onerror=()=>rej(r.error);
-        r.onsuccess=()=>{_cdb=r.result;res(_cdb);};
-        r.onupgradeneeded=e=>{
-          const db=e.target.result;
-          if(!db.objectStoreNames.contains(CST)) db.createObjectStore(CST,{keyPath:'path'});
-        };
-      });
-    };
-
-    const getCached=async path=>{
-      const db=await openCDB();
-      return new Promise((res,rej)=>{
-        const r=db.transaction(CST,'readonly').objectStore(CST).get(path);
-        r.onsuccess=()=>res(r.result||null);
-        r.onerror=()=>rej(r.error);
-      });
-    };
-
-    const putCached=async(path,buf)=>{
-      const db=await openCDB();
-      return new Promise((res,rej)=>{
-        const tx=db.transaction(CST,'readwrite');
-        tx.objectStore(CST).put({path,buf,src:_srcIdx,ts:Date.now()});
-        tx.oncomplete=res;
-        tx.onerror=()=>rej(tx.error);
-      });
-    };
-
-    const hasCached=async path=>{
-      const db=await openCDB();
-      return new Promise((res,rej)=>{
-        const r=db.transaction(CST,'readonly').objectStore(CST).count(path);
-        r.onsuccess=()=>res(r.result>0);
-        r.onerror=()=>rej(r.error);
-      });
-    };
-
-    const setPill=(txt,cls)=>{
-      const p=document.getElementById('pill');
-      p.textContent=txt;p.className=cls;
-    };
-
-    async function clearCache(){
-      try{
-        const db=await openCDB();
-        await new Promise((res,rej)=>{
-          const tx=db.transaction(CST,'readwrite');
-          tx.objectStore(CST).clear();
-          tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
-        });
-        setPill('○ not cached','');
-        const sc=document.getElementById('src-cache-state');
-        const ic=document.getElementById('inf-cache');
-        if(sc) sc.textContent='None';
-        if(ic) ic.textContent='None';
-        mlog('Cache cleared','ok');
-      }catch(e){mlog('Cache clear failed: '+e.message,'err');}
-    }
-
-    const TOTAL_MB=912.81;
-    let _lb=0,_te=TOTAL_MB*1048576;
-
-    const _origFetch=window.fetch.bind(window);
-    window.fetch=async function(input,options){
-      const url=typeof input==='string'?input:(input&&input.url?input.url:String(input));
-      let matchedPath=null;
-      for(const s of SOURCES){
-        const base=s.base+'/';
-        if(url.startsWith(base)){
-          matchedPath=decodeURIComponent(url.slice(base.length).split('?')[0]);
-          break;
-        }
-      }
-      if(!matchedPath){
-        for(const[path,rawUrl]of Object.entries(RAW_FALLBACKS)){
-          if(url===rawUrl){matchedPath=path;break;}
-        }
-      }
-      if(matchedPath){
-        try{
-          const hit=await getCached(matchedPath);
-          if(hit&&hit.buf){
-            _lb+=hit.buf.byteLength;
-            return new Response(hit.buf,{status:200,headers:{'Content-Type':'application/octet-stream','X-Cache':'HIT'}});
-          }
-        }catch(e){}
-      }
-      return _origFetch(input,options);
-    };
-
-    async function fetchWithProgress(path){
-      const url=resolveUrl(path);
-      try{
-        const hit=await getCached(path);
-        if(hit&&hit.buf){
-          _lb+=hit.buf.byteLength;
-          updateBootProgress();
-          return hit.buf;
-        }
-      }catch(e){}
-      const resp=await _origFetch(url);
-      if(!resp.ok) throw new Error('HTTP '+resp.status+': '+url);
-      const reader=resp.body.getReader();
-      const chunks=[];
-      while(true){
-        const{done,value}=await reader.read();
-        if(done) break;
-        _lb+=value.length;chunks.push(value);updateBootProgress();
-      }
-      const total=chunks.reduce((a,c)=>a+c.length,0);
-      const buf=new Uint8Array(total);
-      let off=0;for(const c of chunks){buf.set(c,off);off+=c.length;}
-      putCached(path,buf.buffer).catch(()=>{});
-      return buf.buffer;
-    }
-
-    function updateBootProgress(){
-      const v=Math.min(100,Math.round(_lb/_te*100));
-      const fill=document.getElementById('ls-fill')||document.getElementById('rld-fill');
-      const pct=document.getElementById('ls-pct')||document.getElementById('rld-pct');
-      if(fill) fill.style.width=v+'%';
-      if(pct)  pct.textContent=v+'%';
-      const mb=(_lb/1048576).toFixed(1);
-      const sub=document.getElementById('ls-sub')||document.getElementById('rld-sub');
-      if(sub) sub.textContent=mb+' / '+TOTAL_MB+' MB';
-    }
-
-    async function fetchPartsParallel(base,from,to){
-      const paths=Array.from({length:to-from+1},(_,i)=>base+'.part'+(from+i));
-      const q=paths.map((p,i)=>({p,i}));
-      const bufs=new Array(paths.length);
-      await Promise.all(Array.from({length:4},async()=>{
-        while(q.length){const{p,i}=q.shift();bufs[i]=await fetchWithProgress(p);}
-      }));
-      const total=bufs.reduce((a,b)=>a+b.byteLength,0);
-      const out=new Uint8Array(total);let off=0;
-      for(const b of bufs){out.set(new Uint8Array(b),off);off+=b.byteLength;}
-      return out.buffer;
-    }
-
-    async function autoCacheAll(){
-      mlog('Background cache starting…','info');
-      setPill('↓ caching…','caching');
-      let cached=0,skipped=0,failed=0;
-      const fetchAndCacheOne=async path=>{
-        try{
-          const already=await hasCached(path);
-          if(already){skipped++;return;}
-          const url=resolveUrl(path);
-          const resp=await _origFetch(url);
-          if(!resp.ok) throw new Error('HTTP '+resp.status);
-          const buf=await resp.arrayBuffer();
-          await putCached(path,buf);
+      const zip   = await JSZip.loadAsync(zipBuf);
+      const names = Object.keys(zip.files).filter(n => !zip.files[n].dir);
+      mlog(zipName+': '+names.length+' files','info');
+      for (const name of names) {
+        const rootPath = name.includes('/')?name.split('/').pop():name;
+        try {
+          const already = await hasCached(rootPath);
+          if (already) { skipped++; continue; }
+          const buf = await zip.files[name].async('arraybuffer');
+          await putCached(rootPath, buf);
           cached++;
-        }catch(e){failed++;mlog('Fetch fail: '+path+' — '+e.message,'warn');}
-      };
-      for(const f of['RuntimeInitializeOnLoads.json','ScriptingAssemblies.json']) await fetchAndCacheOne(f);
-      const buildParts=[];
-      for(let i=1;i<=45;i++) buildParts.push('Build/hktruffled.data.part'+i);
-      for(let i=1;i<=2;i++)  buildParts.push('Build/hktruffled.wasm.part'+i);
-      buildParts.push('Build/hktruffled.framework.js','Build/hktruffled.loader.js');
-      for(const f of buildParts) await fetchAndCacheOne(f);
-      const knownSA=Object.keys(CMAP);
-      for(const name of knownSA){ const path=CMAP[name]; await fetchAndCacheOne(path); }
-      for(const zipName of['HK_Assets.zip','HK_Resources.zip']){
-        mlog('Fetching '+zipName+'…','info');
-        setPill('↓ '+zipName+'…','caching');
-        try{
-          const zipUrl=cdnUrl(zipName);
-          let totalBytes=0;
-          try{const head=await _origFetch(zipUrl,{method:'HEAD'});totalBytes=parseInt(head.headers.get('content-length')||'0',10)||0;}catch(_){}
-          let zipBuf;
-          if(totalBytes>0){
-            const CHUNK=8*1024*1024;const chunks=[];
-            for(let start=0;start<totalBytes;start+=CHUNK){
-              const end=Math.min(start+CHUNK-1,totalBytes-1);
-              const r=await _origFetch(zipUrl,{headers:{Range:'bytes='+start+'-'+end}});
-              if(!r.ok&&r.status!==206) throw new Error('Range fetch HTTP '+r.status);
-              chunks.push(await r.arrayBuffer());
-            }
-            const total=chunks.reduce((a,b)=>a+b.byteLength,0);
-            const assembled=new Uint8Array(total);
-            let off=0;for(const c of chunks){assembled.set(new Uint8Array(c),off);off+=c.byteLength;}
-            zipBuf=assembled.buffer;
-          }else{
-            const r=await _origFetch(zipUrl);
-            if(!r.ok) throw new Error('HTTP '+r.status+': '+zipName);
-            zipBuf=await r.arrayBuffer();
-          }
-          const zip=await JSZip.loadAsync(zipBuf);
-          const names=Object.keys(zip.files).filter(n=>!zip.files[n].dir);
-          mlog(zipName+': '+names.length+' files','info');
-          for(const name of names){
-            const rootPath=name.includes('/')?name.split('/').pop():name;
-            try{
-              const already=await hasCached(rootPath);
-              if(already){skipped++;continue;}
-              const buf=await zip.files[name].async('arraybuffer');
-              await putCached(rootPath,buf);cached++;
-            }catch(e){failed++;mlog('ZIP write fail: '+name+' — '+e.message,'warn');}
-          }
-        }catch(e){mlog('ZIP fail: '+zipName+' — '+e.message,'warn');}
+        } catch(e) { failed++; mlog('ZIP write fail: '+name+' — '+e.message,'warn'); }
       }
-      const total=cached+skipped+failed;
-      const allOk=failed===0;
-      const msg='Cache: '+cached+' new, '+skipped+' existing'+(failed?' , '+failed+' failed':'');
-      mlog(msg,allOk?'ok':'warn');
-      setPill(allOk?'● fully cached':'⚠ '+failed+' failed',allOk?'cached':'partial');
-      const sc=document.getElementById('src-cache-state');
-      const ic=document.getElementById('inf-cache');
-      const label=allOk?'Complete':(cached+skipped)+'/'+total;
-      if(sc) sc.textContent=label;
-      if(ic) ic.textContent=label;
-    }
+    } catch(e) { mlog('ZIP fail: '+zipName+' — '+e.message,'warn'); }
+  }
+  const total  = cached + skipped + failed;
+  const allOk  = failed === 0;
+  const msg    = 'Cache: '+cached+' new, '+skipped+' existing'+(failed?' , '+failed+' failed':'');
+  mlog(msg, allOk?'ok':'warn');
+  setPill(allOk?'● fully cached':'⚠ '+failed+' failed', allOk?'cached':'partial');
+  const sc = document.getElementById('src-cache-state');
+  const ic = document.getElementById('inf-cache');
+  const label = allOk ? 'Complete' : (cached+skipped)+'/'+total;
+  if (sc) sc.textContent = label;
+  if (ic) ic.textContent = label;
+}
 
-    const REMAP_PROFILES={
-      'Xbox / XInput':   [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
-      'PS4 / PS5':       [2,1,3,0,4,5,6,7,8,9,10,11,12,13,14,15,16],
-      'Nintendo Switch': [1,0,3,2,4,5,6,7,8,9,10,11,12,13,14,15,16],
-    };
-    const _gps={
-      axes:[0,0,0,0],
-      buttons:Array.from({length:17},()=>({pressed:false,touched:false,value:0}))
-    };
-    let _lastPadId='';
+// ═══════════════════════════════════════════════════════════════
+//  CONTROLLER
+// ═══════════════════════════════════════════════════════════════
+const REMAP_PROFILES = {
+  'Xbox / XInput':   [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
+  'PS4 / PS5':       [2,1,3,0,4,5,6,7,8,9,10,11,12,13,14,15,16],
+  'Nintendo Switch': [1,0,3,2,4,5,6,7,8,9,10,11,12,13,14,15,16],
+};
+const _gps = {
+  axes:[0,0,0,0],
+  buttons:Array.from({length:17},()=>({pressed:false,touched:false,value:0}))
+};
+let _lastPadId = '';
 
-    function detectPadType(id){
-      const s=(id||'').toLowerCase();
-      if(/054c|dualshock|dualsense|ps[345]/i.test(s)) return 'PS4 / PS5';
-      if(/057e|nintendo|switch|joy.?con/i.test(s))    return 'Nintendo Switch';
-      return 'Xbox / XInput';
-    }
+function detectPadType(id) {
+  const s = (id||'').toLowerCase();
+  if (/054c|dualshock|dualsense|ps[345]/i.test(s)) return 'PS4 / PS5';
+  if (/057e|nintendo|switch|joy.?con/i.test(s))    return 'Nintendo Switch';
+  return 'Xbox / XInput';
+}
 
-    const _rGP=navigator.getGamepads?navigator.getGamepads.bind(navigator):()=>[];
-    (function syncGP(){
-      const pads=_rGP();
-      let pad=null;
-      for(const p of pads){if(p&&p.connected){pad=p;break;}}
-      if(pad){
-        if(pad.id!==_lastPadId){
-          _lastPadId=pad.id;
-          const type=detectPadType(pad.id);
-          document.getElementById('gp-name').textContent=(pad.id||'Unknown').substring(0,32);
-          document.getElementById('gp-type').textContent=type;
-          if(JSON.stringify(C.remap)===JSON.stringify(DEF.remap)){
-            C.remap=[...REMAP_PROFILES[type]];cfgSave();
-            mlog('Controller: '+type+' — remap applied','ok');renderRemapRows();
-          }
-        }
-        const dz=C.deadzone/100;
-        _gps.axes=Array.from({length:4},(_,i)=>{const v=(pad.axes||[])[i]||0;return Math.abs(v)<dz?0:v;});
-        const phys=pad.buttons||[];
-        _gps.buttons=C.remap.map(physIdx=>{
-          const b=phys[physIdx];
-          if(!b) return{pressed:false,touched:false,value:0};
-          return typeof b==='object'?{pressed:b.pressed,touched:b.touched||b.pressed,value:b.value}:{pressed:!!b,touched:!!b,value:b?1:0};
-        });
-        updateCtrlVis(pad.axes,_gps.buttons);
-      }else{
-        if(_lastPadId){_lastPadId='';document.getElementById('gp-name').textContent='None';document.getElementById('gp-type').textContent='—';}
-      }
-      requestAnimationFrame(syncGP);
-    })();
-
-    const fGP={
-      id:'Xbox 360 Controller (XInput STANDARD GAMEPAD)',index:0,connected:true,mapping:'standard',
-      get timestamp(){return performance.now();},
-      get axes(){return[..._gps.axes];},
-      get buttons(){return _gps.buttons.map(b=>({pressed:b.pressed,touched:b.touched,value:b.value}));}
-    };
-    navigator.getGamepads=()=>[fGP,null,null,null];
-
-    const fireGP=()=>{try{window.dispatchEvent(new GamepadEvent('gamepadconnected',{gamepad:fGP}));}catch(e){}};
-    setTimeout(fireGP,4000);
-    window.addEventListener('gamepadconnected',()=>setTimeout(fireGP,500));
-
-    (()=>{
-      const grid=document.getElementById('cbtn-grid');
-      BTN_LABELS.forEach((lbl,i)=>{
-        const d=document.createElement('div');
-        d.className='cbtn';d.id='cbtn-'+i;d.textContent=lbl;
-        grid.appendChild(d);
-      });
-    })();
-
-    function updateCtrlVis(axes,btns){
-      const lr=document.getElementById('sd-l'),rr=document.getElementById('sd-r');
-      const ax=axes||[0,0,0,0];
-      const mapS=(x,y)=>'translate(calc(-50% + '+(( x||0)*20)+'px), calc(-50% + '+((y||0)*20)+'px))';
-      lr.style.transform=mapS(ax[0],ax[1]);
-      rr.style.transform=mapS(ax[2],ax[3]);
-      btns.forEach((b,i)=>{const el=document.getElementById('cbtn-'+i);if(el)el.classList.toggle('pressed',!!b.pressed);});
-    }
-
-    function renderRemapRows(){
-      const cont=document.getElementById('remap-rows');cont.innerHTML='';
-      BTN_LABELS.forEach((lbl,xboxIdx)=>{
-        const row=document.createElement('div');row.className='ctrl-map-row';
-        const l=document.createElement('span');l.className='ctrl-map-lbl';l.textContent='Xbox '+lbl;
-        const sel=document.createElement('select');sel.className='ctrl-map-sel';
-        for(let i=0;i<17;i++){
-          const o=document.createElement('option');o.value=i;
-          o.textContent='Phys '+i+(BTN_LABELS[i]?' ('+BTN_LABELS[i]+')':'');
-          if(C.remap[xboxIdx]===i) o.selected=true;
-          sel.appendChild(o);
-        }
-        sel.onchange=()=>{C.remap[xboxIdx]=+sel.value;cfgSave();mlog('Remap: Xbox '+lbl+' → Phys '+sel.value,'info');};
-        row.appendChild(l);row.appendChild(sel);cont.appendChild(row);
-      });
-    }
-    function resetRemap(){C.remap=[...DEF.remap];cfgSave();renderRemapRows();mlog('Remap reset','ok');}
-
-    const dzslEl=document.getElementById('dz-sl');
-    if(dzslEl) dzslEl.oninput=function(){C.deadzone=+this.value;cfgSave();document.getElementById('dz-v').textContent=this.value+'%';};
-
-    const CMAP={
-      Prologue:'StreamingAssets/Prologue.mp4',Intro:'StreamingAssets/Intro.mp4',
-      FinalA:'StreamingAssets/FinalA.mp4',FinalB:'StreamingAssets/FinalB.mp4',
-      FinalC:'StreamingAssets/FinalC.mp4',FinalD:'StreamingAssets/FinalD.mp4',
-      FinalE:'StreamingAssets/FinalE.mp4',FinalF:'StreamingAssets/FinalF.mp4',
-      Blacksmith:'StreamingAssets/Blacksmith.mp4',
-      CharmSlugKiss:'StreamingAssets/CharmSlugKiss.mp4',Fountain:'StreamingAssets/Fountain.mp4',
-      MaskShatter:'StreamingAssets/MaskShatter.mp4',MrMushroom:'StreamingAssets/MrMushroom.mp4',
-      Nailsmith:'StreamingAssets/Nailsmith.mp4',NailsmithPaint:'StreamingAssets/NailsmithPaint.mp4',
-      StagTunnelRun:'StreamingAssets/StagTunnelRun.mp4',Telescope:'StreamingAssets/Telescope.mp4',
-    };
-    let csState='idle';
-
-    hkv.addEventListener('ended',()=>{hkv.style.display='none';hkv.removeAttribute('src');hkv.load();csState='done';setTimeout(doSkipAll,80);});
-    hkv.addEventListener('error',()=>{hkv.style.display='none';csState='idle';doSkipAll();});
-
-    function csPlay(name){
-      if(!CMAP[name]||csState==='playing') return;
-      csState='playing';
-      const assetPath=CMAP[name];
-      const url=resolveUrl(assetPath);
-      _origFetch(url,{method:'HEAD'}).then(r=>{
-        if(!r.ok){mlog('Cutscene '+name+' unavailable ('+r.status+') — skipping','warn');csState='idle';doSkipAll();return;}
-        hkv.src=url;hkv.style.display='block';hkv.currentTime=0;hkv.muted=false;
-        hkv.play().catch(()=>{csState='done';doSkipAll();});
-      }).catch(()=>{csState='idle';doSkipAll();});
-    }
-
-    function doSkipAll(){
-      const keys=[{key:'Escape',code:'Escape',keyCode:27},{key:'Return',code:'Enter',keyCode:13},{key:' ',code:'Space',keyCode:32},{key:'z',code:'KeyZ',keyCode:90}];
-      keys.forEach(k=>{
-        const o={...k,which:k.keyCode,bubbles:true,cancelable:true};
-        cv.dispatchEvent(new KeyboardEvent('keydown',o));cv.dispatchEvent(new KeyboardEvent('keyup',o));
-      });
-      const r=cv.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-      ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t=>
-        cv.dispatchEvent(new MouseEvent(t,{clientX:cx,clientY:cy,bubbles:true,cancelable:true})));
-      const saved=[..._gps.buttons];
-      _gps.buttons=Array.from({length:17},()=>({pressed:true,touched:true,value:1}));
-      setTimeout(()=>{_gps.buttons=saved;},250);fireGP();
-      setTimeout(()=>{csState='idle';},500);
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  SAVE PROFILES
-    // ═══════════════════════════════════════════════════════════════
-    const SAVE_SK='hk_saves_v1';
-    let _slots=[],_activeSlot=0;
-
-    function loadSlots(){
-      try{const s=localStorage.getItem(SAVE_SK);if(s){const d=JSON.parse(s);_slots=d.slots||[];_activeSlot=d.active||0;}}catch(e){}
-      if(!_slots.length) _slots=[{name:'Profile 1',ts:null,data:null}];
-      _activeSlot=Math.min(_activeSlot,_slots.length-1);
-    }
-    function persistSlots(){
-      try{localStorage.setItem(SAVE_SK,JSON.stringify({slots:_slots,active:_activeSlot}));}
-      catch(e){mlog('Profile save failed: '+e.message,'err');}
-    }
-
-    function renderSlotList(){
-      const cont=document.getElementById('slot-list');cont.innerHTML='';
-      _slots.forEach((sl,i)=>{
-        const isActive=i===_activeSlot;
-        const row=document.createElement('div');row.className='slot';
-        const icon=document.createElement('span');
-        icon.className='slot-icon'+(isActive?' active':'');
-        icon.textContent=isActive?'▶':'○';
-        const info=document.createElement('div');info.className='slot-info';
-        const nm=document.createElement('div');
-        nm.className='slot-name'+(isActive?' active':'');
-        nm.textContent=sl.name;
-        const meta=document.createElement('div');meta.className='slot-meta';
-        meta.textContent=sl.ts?new Date(sl.ts).toLocaleDateString()+' · '+new Date(sl.ts).toLocaleTimeString():'No save data';
-        info.appendChild(nm);info.appendChild(meta);
-        const acts=document.createElement('div');acts.className='slot-actions';
-        const selectBtn=document.createElement('button');
-        selectBtn.className='sb'+(isActive?' is-active':'');
-        selectBtn.textContent=isActive?'Active':'Select';
-        selectBtn.onclick=()=>{_activeSlot=i;persistSlots();renderSlotList();mlog('Active: '+sl.name,'ok');};
-        const delBtn=document.createElement('button');
-        delBtn.className='sb bad';delBtn.textContent='✕';
-        delBtn.onclick=()=>{
-          if(_slots.length<=1){mlog('Cannot delete the last profile','warn');return;}
-          if(!confirm('Delete "'+sl.name+'"? This cannot be undone.')) return;
-          _slots.splice(i,1);
-          if(_activeSlot>=_slots.length) _activeSlot=_slots.length-1;
-          persistSlots();renderSlotList();mlog('Profile deleted','ok');
-        };
-        acts.appendChild(selectBtn);acts.appendChild(delBtn);
-        row.appendChild(icon);row.appendChild(info);row.appendChild(acts);
-        cont.appendChild(row);
-      });
-    }
-
-    function createSlot(){
-      if(_slots.length>=8){mlog('Maximum 8 profiles reached','warn');return;}
-      const inp=document.getElementById('slot-name-inp');
-      const name=inp.value.trim()||'Profile '+(+_slots.length+1);
-      _slots.push({name,ts:null,data:null});
-      _activeSlot=_slots.length-1;
-      persistSlots();renderSlotList();inp.value='';
-      mlog('Created: '+name,'ok');
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  SAVE EXPORT
-    // ═══════════════════════════════════════════════════════════════
-    async function doDownloadSave(){
-      mlog('Reading save database…','hi');
-      try{
-        const dbs=await indexedDB.databases();
-        if(!dbs.some(d=>d.name==='/idbfs')){mlog('No save found — play the game first','err');return;}
-        const req=indexedDB.open('/idbfs');
-        req.onsuccess=e=>{
-          const db=e.target.result;
-          const tx=db.transaction('FILE_DATA','readonly'),st=tx.objectStore('FILE_DATA');
-          const vr=st.getAll(),kr=st.getAllKeys();
-          vr.onsuccess=()=>kr.onsuccess=()=>{
-            const data=kr.result.map((key,i)=>{
-              const v=vr.result[i];let c=v.contents;
-              if(c instanceof Int8Array){const o={};for(let j=0;j<c.length;j++)o[j]=c[j];c=o;}
-              return{key,value:{timestamp:v.timestamp,mode:v.mode,contents:c}};
-            });
-            _slots[_activeSlot].data=data;_slots[_activeSlot].ts=Date.now();
-            persistSlots();renderSlotList();
-            const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-            const a=document.createElement('a');
-            a.href=URL.createObjectURL(blob);
-            a.download='hk-save-'+_slots[_activeSlot].name.replace(/\s+/g,'-')+'.json';
-            a.click();mlog('Save exported','ok');
-          };
-        };
-        req.onerror=()=>mlog('Could not open save DB','err');
-      }catch(e){mlog('Export error: '+e.message,'err');}
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  SAVE IMPORT — from doc 4 (simpler, no preview)
-    // ═══════════════════════════════════════════════════════════════
-    let _saveData=null;
-
-    const dzEl=document.getElementById('dz'),fi=document.getElementById('fi');
-    dzEl.onclick=()=>fi.click();
-    dzEl.ondragover=e=>{e.preventDefault();dzEl.classList.add('drag');};
-    dzEl.ondragleave=()=>dzEl.classList.remove('drag');
-    dzEl.ondrop=e=>{e.preventDefault();dzEl.classList.remove('drag');if(e.dataTransfer.files[0])loadSF(e.dataTransfer.files[0]);};
-    fi.onchange=()=>{if(fi.files[0])loadSF(fi.files[0]);};
-
-    function loadSF(file){
-      const r=new FileReader();
-      r.onload=e=>{try{rxSave(JSON.parse(e.target.result),file.name);}catch(err){mlog('Bad file: '+err.message,'err');}};
-      r.readAsText(file);
-    }
-    function rxSave(data,name){
-      _saveData=data;
-      const n=Array.isArray(data)?data.length:Object.keys(data).length;
-      document.getElementById('dz-lbl').textContent='✓ '+name+' ('+n+' entries)';
-      dzEl.classList.add('has-file');
-      document.getElementById('inj-btn').disabled=false;
-      mlog('Save ready: '+name,'ok');
-    }
-
-    async function fetchSaveFromUrl(){
-      const url=document.getElementById('save-url').value.trim();
-      if(!url){mlog('Paste a URL first','warn');return;}
-      try{
-        const res=await _origFetch(url);
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        rxSave(JSON.parse(await res.text()),url.split('/').pop());
-      }catch(e){mlog('URL fetch failed: '+e.message,'err');}
-    }
-
-    async function doInjectSave(){
-      if(!_saveData){mlog('No save loaded','err');return;}
-      mlog('Injecting…','hi');
-      _slots[_activeSlot].data=_saveData;_slots[_activeSlot].ts=Date.now();
-      persistSlots();renderSlotList();
-
-      if(Array.isArray(_saveData)){
-        const req=indexedDB.open('/idbfs');
-        req.onsuccess=e=>{
-          const db=e.target.result;
-          db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess=ev=>{
-            let hash=null;
-            for(const k of ev.target.result){
-              const p=String(k).split('/');if(p.length>=3){hash=p[2];break;}
-            }
-            const tx=db.transaction('FILE_DATA','readwrite'),st=tx.objectStore('FILE_DATA');
-            st.clear();let w=0;
-            _saveData.forEach(entry=>{
-              let key=String(entry.key);
-              if(hash){const p=key.split('/');if(p.length>=3){p[2]=hash;key=p.join('/');}}
-              let c=entry.value.contents;
-              if(c&&typeof c==='object'&&!(c instanceof Int8Array)){
-                const idx=Object.keys(c).map(Number).sort((a,b)=>a-b);
-                const arr=new Int8Array(idx.length);idx.forEach(i=>arr[i]=c[i]);c=arr;
-              }
-              st.put({timestamp:new Date(entry.value.timestamp),mode:entry.value.mode,contents:c},key);w++;
-            });
-            tx.oncomplete=()=>{mlog('Injected '+w+' entries — reloading…','ok');db.close();setTimeout(reloadGame,1500);};
-            tx.onerror=err=>mlog('Write error: '+err,'err');
-          };
-        };
-        req.onerror=()=>mlog('Could not open save DB','err');
-        return;
-      }
-
-      // Flat {dbname/store:[...]} format
-      let ok=0;const keys=Object.keys(_saveData);
-      for(const sk of keys){
-        const sl=sk.indexOf('/'),dbN=sk.substring(0,sl),stN=sk.substring(sl+1);
-        try{
-          const db=await openOrCreate(dbN,stN);
-          await new Promise((res,rej)=>{
-            const tx=db.transaction([stN],'readwrite'),st=tx.objectStore(stN);st.clear();
-            _saveData[sk].forEach(rec=>{const r={...rec};if(Array.isArray(r.contents))r.contents=new Uint8Array(r.contents);st.put(r);});
-            tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
-          });db.close();ok++;
-        }catch(e){mlog('Failed: '+sk+' — '+e.message,'err');}
-      }
-      mlog(ok+'/'+keys.length+' stores injected',ok===keys.length?'ok':'warn');
-      if(ok>0){mlog('Reloading…','hi');setTimeout(reloadGame,1500);}
-    }
-
-    function openOrCreate(dbName,storeName){
-      return new Promise((resolve,reject)=>{
-        const probe=indexedDB.open(dbName);
-        probe.onsuccess=()=>{
-          const db=probe.result,ver=db.version,has=db.objectStoreNames.contains(storeName);db.close();
-          const req=indexedDB.open(dbName,has?ver:ver+1);
-          if(!has) req.onupgradeneeded=e=>e.target.result.createObjectStore(storeName,{keyPath:'filename'});
-          req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
-        };
-        probe.onerror=()=>{
-          const req=indexedDB.open(dbName,1);
-          req.onupgradeneeded=e=>e.target.result.createObjectStore(storeName,{keyPath:'filename'});
-          req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
-        };
-      });
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  GAME RELOAD
-    // ═══════════════════════════════════════════════════════════════
-    async function reloadGame(){
-      mlog('Reloading Unity…','hi');
-      if(unityInstance){
-        try{await unityInstance.Quit();}catch(e){mlog('Quit warn: '+e.message,'warn');}
-        unityInstance=null;
-      }
-      const oldCv=document.getElementById('unity-canvas');
-      const newCv=document.createElement('canvas');
-      newCv.id='unity-canvas';
-      newCv.style.cssText='position:absolute;top:0;left:0;width:100vw;height:100vh;image-rendering:pixelated';
-      oldCv.parentNode.replaceChild(newCv,oldCv);
-      cv=newCv;
-      _blobUrls.forEach(u=>URL.revokeObjectURL(u));
-      _blobUrls.clear();
-      const rld=document.createElement('div');
-      rld.id='rld-overlay';
-      rld.style.cssText='position:fixed;inset:0;background:#000;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px';
-      rld.innerHTML='<div style="font-size:36px;color:#c8a96e;animation:breathe 2.4s ease-in-out infinite">⚔</div>'
-        +'<h1 style="color:#c8a96e;font:700 22px Cinzel,serif;letter-spacing:7px">Hollow Knight</h1>'
-        +'<div style="width:280px;height:1px;background:#181818"><div id="rld-fill" style="height:100%;background:linear-gradient(90deg,#a07840,#e8c98e);width:0%;transition:width .15s"></div></div>'
-        +'<div id="rld-pct" style="color:#3a3a3a;font-size:9px;letter-spacing:3px">0%</div>'
-        +'<div id="rld-sub" style="color:#444;font-size:9px;letter-spacing:1.5px">Reloading…</div>';
-      document.body.appendChild(rld);
-      _lb=0;_te=TOTAL_MB*1048576;
-      const setP=v=>{
-        const f=document.getElementById('rld-fill'),t=document.getElementById('rld-pct');
-        if(f) f.style.width=Math.min(100,Math.round(v))+'%';
-        if(t) t.textContent=Math.min(100,Math.round(v))+'%';
-      };
-      const setSub=m=>{const el=document.getElementById('rld-sub');if(el)el.textContent=m;};
-      try{
-        await launchUnity(rld,setP,setSub,()=>{
-          mlog('Unity reloaded ⚔','ok');
-          mlog(C.preset+'|'+RES[Math.min(C.resolution,RES.length-1)].l+'|'+C.memory+'MB','hi');
-          setTimeout(fireGP,4000);
-        });
-      }catch(e){
-        mlog('Reload error: '+e.message,'err');
-        setSub('Error — open Log tab');
+const _rGP = navigator.getGamepads ? navigator.getGamepads.bind(navigator) : ()=>[];
+(function syncGP(){
+  const pads = _rGP();
+  let pad = null;
+  for (const p of pads) { if (p&&p.connected) { pad=p; break; } }
+  if (pad) {
+    if (pad.id !== _lastPadId) {
+      _lastPadId = pad.id;
+      const type = detectPadType(pad.id);
+      document.getElementById('gp-name').textContent = (pad.id||'Unknown').substring(0,32);
+      document.getElementById('gp-type').textContent = type;
+      if (JSON.stringify(C.remap) === JSON.stringify(DEF.remap)) {
+        C.remap = [...REMAP_PROFILES[type]]; cfgSave();
+        mlog('Controller: '+type+' — remap applied','ok'); renderRemapRows();
       }
     }
-
-    (()=>{
-      const resume=()=>{
-        if(window._actxUnlocked) return;
-        const ctx=window.AudioContext||window.webkitAudioContext;
-        if(ctx){
-          const _AC=ctx,key=ctx===window.AudioContext?'AudioContext':'webkitAudioContext';
-          window[key]=function(...a){const c=new _AC(...a);if(c.state==='suspended')c.resume().catch(()=>{});return c;};
-        }
-        window._actxUnlocked=true;
-      };
-      ['pointerdown','keydown','touchstart'].forEach(e=>window.addEventListener(e,resume,{once:true,capture:true}));
-    })();
-
-    (()=>{
-      let _syncing=false;
-      window._patchFSSync=()=>{
-        if(!window.FS||window.FS._patched) return;
-        window.FS._patched=true;
-        const orig=window.FS.syncfs;
-        window.FS.syncfs=function(populate,cb){
-          if(_syncing){if(cb)cb(null);return;}
-          _syncing=true;
-          orig.call(window.FS,populate,err=>{_syncing=false;if(cb)cb(err);});
-        };
-      };
-    })();
-
-    function buildUnityConfig(dataUrl,wasmBuf,fwUrl){
-      return{
-        dataUrl,frameworkUrl:fwUrl,
-        instantiateWasm(imports,onSuccess){
-          WebAssembly.instantiate(wasmBuf,imports)
-            .then(r=>onSuccess(r.instance,r.module))
-            .catch(e=>mlog('WASM error: '+e,'err'));
-          return{};
-        },
-        streamingAssetsUrl:cdnUrl('StreamingAssets'),
-        companyName:'Team Cherry',productName:'Hollow Knight',productVersion:'1.0',
-        devicePixelRatio:C.dpiScale,
-        matchWebGLToCanvasSize:false,
-        memory:C.memory*1024*1024,
-        captureAllKeyboardInput:C.captureAllKeyboardInput,
-        webglContextAttributes:{
-          antialias:C.antialias,alpha:false,depth:C.depth,stencil:C.stencil,
-          premultipliedAlpha:false,preserveDrawingBuffer:C.preserveDrawingBuffer,
-          desynchronized:C.desynchronized,powerPreference:C.powerPreference,
-          failIfMajorPerformanceCaveat:false,
-        }
-      };
-    }
-
-    async function launchUnity(loadingEl,setProgress,setSubtitle,onReady){
-      setSubtitle('Loading game files…');
-      const[dataBuf,wasmBuf,fwBuf,ldrBuf]=await Promise.all([
-        fetchPartsParallel('Build/hktruffled.data',1,45),
-        fetchPartsParallel('Build/hktruffled.wasm',1,2),
-        fetchWithProgress('Build/hktruffled.framework.js'),
-        fetchWithProgress('Build/hktruffled.loader.js'),
-      ]);
-      const dataUrl=URL.createObjectURL(new Blob([dataBuf]));
-      _blobUrls.add(dataUrl);
-      let fwUrl;
-      if(typeof window.unityFramework!=='undefined'){
-        fwUrl=URL.createObjectURL(new Blob(['/* cached */'],{type:'application/javascript'}));
-      }else{
-        fwUrl=URL.createObjectURL(new Blob([fwBuf],{type:'application/javascript'}));
-      }
-      _blobUrls.add(fwUrl);
-      setSubtitle('Starting engine…');setProgress(99);
-      if(typeof window.createUnityInstance==='undefined'){
-        const ldrUrl=URL.createObjectURL(new Blob([ldrBuf],{type:'application/javascript'}));
-        _blobUrls.add(ldrUrl);
-        const sc=document.createElement('script');sc.src=ldrUrl;sc.dataset.hkLoader='1';
-        await new Promise((resolve,reject)=>{
-          sc.onload=resolve;
-          sc.onerror=()=>reject(new Error('Loader script failed'));
-          document.body.appendChild(sc);
-        });
-      }
-      setProgress(100);
-      const inst=await createUnityInstance(cv,buildUnityConfig(dataUrl,wasmBuf,fwUrl));
-      unityInstance=inst;
-      window._patchFSSync?.();
-      loadingEl.style.transition='opacity .5s';
-      loadingEl.style.opacity='0';
-      setTimeout(()=>{if(loadingEl.parentNode)loadingEl.remove();},600);
-      applyRes();
-      onReady();
-      setTimeout(()=>{_blobUrls.forEach(u=>URL.revokeObjectURL(u));_blobUrls.clear();},8*60*1000);
-    }
-
-    ['keydown','keyup','keypress'].forEach(event=>{
-      window.addEventListener(event,e=>{
-        const isInput=document.activeElement&&['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
-        if(isInput) e.stopImmediatePropagation();
-      },true);
+    const dz = C.deadzone / 100;
+    _gps.axes = Array.from({length:4}, (_,i) => { const v=(pad.axes||[])[i]||0; return Math.abs(v)<dz?0:v; });
+    const phys = pad.buttons || [];
+    _gps.buttons = C.remap.map(physIdx => {
+      const b = phys[physIdx];
+      if (!b) return {pressed:false,touched:false,value:0};
+      return typeof b==='object' ? {pressed:b.pressed,touched:b.touched||b.pressed,value:b.value} : {pressed:!!b,touched:!!b,value:b?1:0};
     });
+    updateCtrlVis(pad.axes, _gps.buttons);
+  } else {
+    if (_lastPadId) { _lastPadId=''; document.getElementById('gp-name').textContent='None'; document.getElementById('gp-type').textContent='—'; }
+  }
+  requestAnimationFrame(syncGP);
+})();
 
-    document.addEventListener('pointerdown',e=>{
-      const panel=document.getElementById('panel');
-      if(!panel.classList.contains('open')) return;
-      if(!panel.contains(e.target)&&e.target!==document.getElementById('handle')){
-        panel.classList.remove('open');
-        document.getElementById('handle').classList.remove('open');
-        cv.focus();
-      }
-    },true);
+const fGP = {
+  id:'Xbox 360 Controller (XInput STANDARD GAMEPAD)',index:0,connected:true,mapping:'standard',
+  get timestamp(){ return performance.now(); },
+  get axes(){ return [..._gps.axes]; },
+  get buttons(){ return _gps.buttons.map(b=>({pressed:b.pressed,touched:b.touched,value:b.value})); }
+};
+navigator.getGamepads = () => [fGP,null,null,null];
 
-    setTimeout(()=>{
-      const t=document.getElementById('session-toast');
-      t.style.display='block';requestAnimationFrame(()=>t.classList.add('show'));
-      setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.style.display='none',400);},8000);
-    },45*60*1000);
+const fireGP = () => { try { window.dispatchEvent(new GamepadEvent('gamepadconnected',{gamepad:fGP})); } catch(e){} };
+setTimeout(fireGP, 4000);
+window.addEventListener('gamepadconnected', () => setTimeout(fireGP,500));
 
-    if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){
-      const m=document.createElement('meta');
-      m.name='viewport';m.content='width=device-width,height=device-height,initial-scale=1,user-scalable=no';
-      document.head.appendChild(m);
+(()=>{
+  const grid = document.getElementById('cbtn-grid');
+  BTN_LABELS.forEach((lbl,i) => {
+    const d = document.createElement('div');
+    d.className='cbtn'; d.id='cbtn-'+i; d.textContent=lbl;
+    grid.appendChild(d);
+  });
+})();
+
+function updateCtrlVis(axes, btns) {
+  const lr=document.getElementById('sd-l'), rr=document.getElementById('sd-r');
+  const ax=axes||[0,0,0,0];
+  const mapS=(x,y)=>'translate(calc(-50% + '+((x||0)*20)+'px), calc(-50% + '+((y||0)*20)+'px))';
+  lr.style.transform=mapS(ax[0],ax[1]);
+  rr.style.transform=mapS(ax[2],ax[3]);
+  btns.forEach((b,i) => { const el=document.getElementById('cbtn-'+i); if(el) el.classList.toggle('pressed',!!b.pressed); });
+}
+
+function renderRemapRows() {
+  const cont = document.getElementById('remap-rows'); cont.innerHTML='';
+  BTN_LABELS.forEach((lbl, xboxIdx) => {
+    const row=document.createElement('div'); row.className='ctrl-map-row';
+    const l=document.createElement('span'); l.className='ctrl-map-lbl'; l.textContent='Xbox '+lbl;
+    const sel=document.createElement('select'); sel.className='ctrl-map-sel';
+    for (let i=0;i<17;i++) {
+      const o=document.createElement('option'); o.value=i;
+      o.textContent='Phys '+i+(BTN_LABELS[i]?' ('+BTN_LABELS[i]+')':'');
+      if (C.remap[xboxIdx]===i) o.selected=true;
+      sel.appendChild(o);
     }
+    sel.onchange=()=>{ C.remap[xboxIdx]=+sel.value; cfgSave(); mlog('Remap: Xbox '+lbl+' → Phys '+sel.value,'info'); };
+    row.appendChild(l); row.appendChild(sel); cont.appendChild(row);
+  });
+}
+function resetRemap() { C.remap=[...DEF.remap]; cfgSave(); renderRemapRows(); mlog('Remap reset','ok'); }
 
-    (async()=>{
-      cfgLoad();loadSlots();syncUI();
-      try{
-        const cvt=document.createElement('canvas');
-        const gl=cvt.getContext('webgl')||cvt.getContext('experimental-webgl');
-        if(gl){
-          const ext=gl.getExtension('WEBGL_debug_renderer_info');
-          if(ext) document.getElementById('inf-gpu').textContent=(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)||'unknown').substring(0,28);
+const dzslEl = document.getElementById('dz-sl');
+if (dzslEl) dzslEl.oninput = function() { C.deadzone=+this.value; cfgSave(); document.getElementById('dz-v').textContent=this.value+'%'; };
+
+// ═══════════════════════════════════════════════════════════════
+//  CUTSCENES
+// ═══════════════════════════════════════════════════════════════
+const CMAP = {
+  Prologue:'StreamingAssets/Prologue.mp4', Intro:'StreamingAssets/Intro.mp4',
+  FinalA:'StreamingAssets/FinalA.mp4', FinalB:'StreamingAssets/FinalB.mp4',
+  FinalC:'StreamingAssets/FinalC.mp4', FinalD:'StreamingAssets/FinalD.mp4',
+  FinalE:'StreamingAssets/FinalE.mp4', FinalF:'StreamingAssets/FinalF.mp4',
+  Blacksmith:'StreamingAssets/Blacksmith.mp4',
+  CharmSlugKiss:'StreamingAssets/CharmSlugKiss.mp4', Fountain:'StreamingAssets/Fountain.mp4',
+  MaskShatter:'StreamingAssets/MaskShatter.mp4', MrMushroom:'StreamingAssets/MrMushroom.mp4',
+  Nailsmith:'StreamingAssets/Nailsmith.mp4', NailsmithPaint:'StreamingAssets/NailsmithPaint.mp4',
+  StagTunnelRun:'StreamingAssets/StagTunnelRun.mp4', Telescope:'StreamingAssets/Telescope.mp4',
+};
+let csState = 'idle';
+
+hkv.addEventListener('ended', () => { hkv.style.display='none'; hkv.removeAttribute('src'); hkv.load(); csState='done'; setTimeout(doSkipAll,80); });
+hkv.addEventListener('error', () => { hkv.style.display='none'; csState='idle'; doSkipAll(); });
+
+function csPlay(name) {
+  if (!CMAP[name] || csState==='playing') return;
+  csState='playing';
+  const assetPath = CMAP[name];
+  const url = resolveUrl(assetPath);
+  _origFetch(url,{method:'HEAD'}).then(r => {
+    if (!r.ok) { mlog('Cutscene '+name+' unavailable ('+r.status+') — skipping','warn'); csState='idle'; doSkipAll(); return; }
+    hkv.src=url; hkv.style.display='block'; hkv.currentTime=0; hkv.muted=false;
+    hkv.play().catch(()=>{ csState='done'; doSkipAll(); });
+  }).catch(()=>{ csState='idle'; doSkipAll(); });
+}
+
+function doSkipAll() {
+  const keys=[{key:'Escape',code:'Escape',keyCode:27},{key:'Return',code:'Enter',keyCode:13},{key:' ',code:'Space',keyCode:32},{key:'z',code:'KeyZ',keyCode:90}];
+  keys.forEach(k => {
+    const o={...k,which:k.keyCode,bubbles:true,cancelable:true};
+    cv.dispatchEvent(new KeyboardEvent('keydown',o)); cv.dispatchEvent(new KeyboardEvent('keyup',o));
+  });
+  const r=cv.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+  ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(t =>
+    cv.dispatchEvent(new MouseEvent(t,{clientX:cx,clientY:cy,bubbles:true,cancelable:true})));
+  const saved=[..._gps.buttons];
+  _gps.buttons=Array.from({length:17},()=>({pressed:true,touched:true,value:1}));
+  setTimeout(()=>{ _gps.buttons=saved; },250); fireGP();
+  setTimeout(()=>{ csState='idle'; },500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SAVE PROFILES  (all in IDB 'slots' and 'saves' stores)
+// ═══════════════════════════════════════════════════════════════
+let _slots      = [];
+let _activeSlot = 0;
+
+async function loadSlots() {
+  try {
+    const row = await mdbGet('slots', 'meta');
+    if (row) { _slots = row.slots || []; _activeSlot = row.active || 0; }
+  } catch(e) {}
+  if (!_slots.length) _slots = [{ name:'Profile 1', ts:null }];
+  _activeSlot = Math.min(_activeSlot, _slots.length - 1);
+}
+
+async function persistSlots() {
+  // Only store metadata (name+ts), never raw save data — that lives in 'saves'
+  try {
+    await mdbPut('slots', { k:'meta', slots:_slots.map(s=>({name:s.name, ts:s.ts})), active:_activeSlot });
+  } catch(e) { mlog('Profile meta save failed: '+e.message,'err'); }
+}
+
+async function saveSlotData(idx, data) {
+  try { await mdbPut('saves', { idx, data, ts:Date.now() }); }
+  catch(e) { mlog('Profile data save failed: '+e.message,'err'); }
+}
+
+async function loadSlotData(idx) {
+  try { const row = await mdbGet('saves', idx); return row ? row.data : null; }
+  catch(e) { return null; }
+}
+
+async function deleteSlotData(idx) {
+  try { await mdbDelete('saves', idx); } catch(e) {}
+}
+
+function renderSlotList() {
+  const cont = document.getElementById('slot-list'); cont.innerHTML='';
+  _slots.forEach((sl, i) => {
+    const isActive = i === _activeSlot;
+    const row      = document.createElement('div'); row.className='slot';
+    const icon     = document.createElement('span');
+    icon.className = 'slot-icon' + (isActive?' active':'');
+    icon.textContent = isActive ? '▶' : '○';
+    const info = document.createElement('div'); info.className='slot-info';
+    const nm   = document.createElement('div');
+    nm.className = 'slot-name' + (isActive?' active':'');
+    nm.textContent = sl.name;
+    const meta = document.createElement('div'); meta.className='slot-meta';
+    meta.textContent = sl.ts ? new Date(sl.ts).toLocaleDateString()+' · '+new Date(sl.ts).toLocaleTimeString() : 'No save data';
+    info.appendChild(nm); info.appendChild(meta);
+    const acts      = document.createElement('div'); acts.className='slot-actions';
+    const selectBtn = document.createElement('button');
+    selectBtn.className = 'sb' + (isActive?' is-active':'');
+    selectBtn.textContent = isActive ? 'Active' : 'Select';
+    selectBtn.onclick = async () => { _activeSlot=i; await persistSlots(); renderSlotList(); mlog('Active: '+sl.name,'ok'); };
+    const delBtn = document.createElement('button');
+    delBtn.className='sb bad'; delBtn.textContent='✕';
+    delBtn.onclick = async () => {
+      if (_slots.length <= 1) { mlog('Cannot delete the last profile','warn'); return; }
+      if (!confirm('Delete "'+sl.name+'"? This cannot be undone.')) return;
+      await deleteSlotData(i);
+      _slots.splice(i, 1);
+      if (_activeSlot >= _slots.length) _activeSlot = _slots.length - 1;
+      await persistSlots(); renderSlotList(); mlog('Profile deleted','ok');
+    };
+    acts.appendChild(selectBtn); acts.appendChild(delBtn);
+    row.appendChild(icon); row.appendChild(info); row.appendChild(acts);
+    cont.appendChild(row);
+  });
+}
+
+async function createSlot() {
+  if (_slots.length >= 8) { mlog('Maximum 8 profiles reached','warn'); return; }
+  const inp  = document.getElementById('slot-name-inp');
+  const name = inp.value.trim() || 'Profile '+(_slots.length+1);
+  _slots.push({ name, ts:null });
+  _activeSlot = _slots.length - 1;
+  await persistSlots(); renderSlotList(); inp.value='';
+  mlog('Created: '+name,'ok');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SAVE EXPORT
+// ═══════════════════════════════════════════════════════════════
+async function doDownloadSave() {
+  mlog('Reading save database…','hi');
+  try {
+    const dbs = await indexedDB.databases();
+    if (!dbs.some(d => d.name==='/idbfs')) { mlog('No save found — play the game first','err'); return; }
+    const req = indexedDB.open('/idbfs');
+    req.onsuccess = e => {
+      const db = e.target.result;
+      const tx = db.transaction('FILE_DATA','readonly'), st = tx.objectStore('FILE_DATA');
+      const vr = st.getAll(), kr = st.getAllKeys();
+      vr.onsuccess = () => kr.onsuccess = () => {
+        const data = kr.result.map((key,i) => {
+          const v = vr.result[i]; let c = v.contents;
+          if (c instanceof Int8Array) { const o={}; for(let j=0;j<c.length;j++) o[j]=c[j]; c=o; }
+          return { key, value:{ timestamp:v.timestamp, mode:v.mode, contents:c }};
+        });
+        // Also persist into active slot
+        _slots[_activeSlot].ts = Date.now();
+        persistSlots(); renderSlotList();
+        saveSlotData(_activeSlot, data);
+        const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+        const a    = document.createElement('a');
+        a.href     = URL.createObjectURL(blob);
+        a.download = 'hk-save-'+_slots[_activeSlot].name.replace(/\s+/g,'-')+'.json';
+        a.click(); mlog('Save exported','ok');
+      };
+    };
+    req.onerror = () => mlog('Could not open save DB','err');
+  } catch(e) { mlog('Export error: '+e.message,'err'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SAVE IMPORT
+// ═══════════════════════════════════════════════════════════════
+let _saveData = null;
+
+const dzEl = document.getElementById('dz'), fi = document.getElementById('fi');
+dzEl.onclick    = () => fi.click();
+dzEl.ondragover = e => { e.preventDefault(); dzEl.classList.add('drag'); };
+dzEl.ondragleave = () => dzEl.classList.remove('drag');
+dzEl.ondrop     = e => { e.preventDefault(); dzEl.classList.remove('drag'); if(e.dataTransfer.files[0]) loadSF(e.dataTransfer.files[0]); };
+fi.onchange     = () => { if(fi.files[0]) loadSF(fi.files[0]); };
+
+function loadSF(file) {
+  const r = new FileReader();
+  r.onload = e => { try { rxSave(JSON.parse(e.target.result), file.name); } catch(err) { mlog('Bad file: '+err.message,'err'); } };
+  r.readAsText(file);
+}
+function rxSave(data, name) {
+  _saveData = data;
+  const n   = Array.isArray(data) ? data.length : Object.keys(data).length;
+  document.getElementById('dz-lbl').textContent = '✓ '+name+' ('+n+' entries)';
+  dzEl.classList.add('has-file');
+  document.getElementById('inj-btn').disabled = false;
+  mlog('Save ready: '+name,'ok');
+}
+
+async function fetchSaveFromUrl() {
+  const url = document.getElementById('save-url').value.trim();
+  if (!url) { mlog('Paste a URL first','warn'); return; }
+  try {
+    const res = await _origFetch(url);
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    rxSave(JSON.parse(await res.text()), url.split('/').pop());
+  } catch(e) { mlog('URL fetch failed: '+e.message,'err'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SAVE INJECT  — two-phase via sessionStorage flag
+//
+//  Phase 1: Store raw data in IDB 'saves', set a sessionStorage
+//           flag, then reload so Unity can init /idbfs first.
+//  Phase 2: After Unity ready, read the flag, pull data from IDB,
+//           detect the hash Unity wrote, rewrite keys, syncfs.
+// ═══════════════════════════════════════════════════════════════
+const PENDING_KEY = 'hk_inject_slot'; // sessionStorage key — just stores the slot index, data stays in IDB
+
+async function doInjectSave() {
+  if (!_saveData) { mlog('No save loaded','err'); return; }
+  mlog('Queuing save for injection…','hi');
+
+  // Save the raw data into the active slot in IDB
+  await saveSlotData(_activeSlot, _saveData);
+  _slots[_activeSlot].ts = Date.now();
+  await persistSlots(); renderSlotList();
+
+  // Flag which slot to inject after reload
+  try { sessionStorage.setItem(PENDING_KEY, String(_activeSlot)); } catch(e) {}
+
+  mlog('Reloading — will inject after Unity init…','warn');
+  setTimeout(reloadGame, 400);
+}
+
+// Called from onReady in both launchUnity calls
+async function checkPendingInject() {
+  let slotIdx = null;
+  try { const v = sessionStorage.getItem(PENDING_KEY); if (v !== null) slotIdx = parseInt(v, 10); } catch(e) {}
+  if (slotIdx === null || isNaN(slotIdx)) return;
+
+  try { sessionStorage.removeItem(PENDING_KEY); } catch(e) {}
+
+  mlog('Pending inject for slot '+slotIdx+' — waiting for Unity IDB init…','info');
+
+  // Wait for Unity to write its own /idbfs skeleton (creates the hash path)
+  await new Promise(r => setTimeout(r, 8000));
+
+  const data = await loadSlotData(slotIdx);
+  if (!data) { mlog('No data found for slot '+slotIdx,'err'); return; }
+
+  if (Array.isArray(data)) {
+    await injectIdbDump(data);
+  } else {
+    await injectFlatFormat(data);
+  }
+}
+
+async function injectIdbDump(data) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('/idbfs');
+    req.onerror = () => { mlog('Could not open /idbfs','err'); resolve(); };
+    req.onsuccess = e => {
+      const db = e.target.result;
+      db.transaction('FILE_DATA','readonly').objectStore('FILE_DATA').getAllKeys().onsuccess = ev => {
+        const existingKeys = ev.target.result;
+        let hash = null;
+        for (const k of existingKeys) {
+          const p = String(k).split('/');
+          if (p.length >= 3) { hash = p[2]; break; }
         }
-      }catch(e){}
-      cv.style.cssText='position:absolute;top:0;left:0;width:100vw;height:100vh;image-rendering:pixelated';
-      const idx=Math.min(C.resolution,RES.length-1);
-      cv.width=Math.round(window.innerWidth*RES[idx].v*(C.dpiScale||1));
-      cv.height=Math.round(window.innerHeight*RES[idx].v*(C.dpiScale||1));
-      await openCDB();
-      _te=TOTAL_MB*1048576;
-      const lsEl=document.getElementById('ls');
-      try{
-        await launchUnity(
-          lsEl,
-          p=>{const v=Math.min(100,Math.round(p));document.getElementById('ls-fill').style.width=v+'%';document.getElementById('ls-pct').textContent=v+'%';},
-          m=>document.getElementById('ls-sub').textContent=m,
-          ()=>{
-            mlog('Unity ready ⚔','ok');
-            mlog(C.preset+'|'+RES[idx].l+'|'+C.memory+'MB','hi');
-            mlog('Source: '+SOURCES[_srcIdx].name,'info');
-            setTimeout(fireGP,4000);
-            setTimeout(()=>autoCacheAll().catch(e=>mlog('Cache error: '+e.message,'err')),3000);
+        if (!hash) {
+          mlog('IDB hash not found — Unity may not have saved yet. Try loading a save slot in-game first, then re-inject.','warn');
+          db.close(); resolve(); return;
+        }
+        mlog('IDB hash: '+hash,'info');
+        const tx = db.transaction('FILE_DATA','readwrite'), st = tx.objectStore('FILE_DATA');
+        let w = 0;
+        data.forEach(entry => {
+          let key = String(entry.key);
+          const p = key.split('/');
+          if (p.length >= 3) { p[2] = hash; key = p.join('/'); }
+          let c = entry.value.contents;
+          if (c && typeof c==='object' && !(c instanceof Int8Array)) {
+            const idx2 = Object.keys(c).map(Number).sort((a,b)=>a-b);
+            const arr  = new Int8Array(idx2.length);
+            idx2.forEach(i => arr[i] = c[i]);
+            c = arr;
           }
-        );
-      }catch(e){
-        mlog('Boot error: '+e.message,'err');
-        const sub=document.getElementById('ls-sub');
-        sub.textContent='Error — open Log tab';
-        sub.style.color='#ef5350';
+          st.put({ timestamp:new Date(entry.value.timestamp), mode:entry.value.mode, contents:c }, key);
+          w++;
+        });
+        tx.oncomplete = () => {
+          mlog('Injected '+w+' entries ✓','ok');
+          db.close();
+          // Force Unity FS to re-read from IDB
+          setTimeout(() => {
+            if (window.FS && window.FS.syncfs) {
+              window.FS.syncfs(true, err => {
+                if (err) mlog('FS.syncfs error: '+err,'warn');
+                else     mlog('FS synced — load your save in-game ✓','ok');
+              });
+            } else {
+              mlog('FS not ready for syncfs — save written to IDB, reload game manually if needed','warn');
+            }
+          }, 1500);
+          resolve();
+        };
+        tx.onerror = err => { mlog('Write error: '+err,'err'); resolve(); };
+      };
+    };
+  });
+}
+
+async function injectFlatFormat(data) {
+  let ok=0; const keys=Object.keys(data);
+  for (const sk of keys) {
+    const sl=sk.indexOf('/'), dbN=sk.substring(0,sl), stN=sk.substring(sl+1);
+    try {
+      const db = await openOrCreate(dbN, stN);
+      await new Promise((res,rej) => {
+        const tx=db.transaction([stN],'readwrite'), st=tx.objectStore(stN); st.clear();
+        data[sk].forEach(rec => { const r={...rec}; if(Array.isArray(r.contents))r.contents=new Uint8Array(r.contents); st.put(r); });
+        tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+      }); db.close(); ok++;
+    } catch(e) { mlog('Failed: '+sk+' — '+e.message,'err'); }
+  }
+  mlog(ok+'/'+keys.length+' stores injected', ok===keys.length?'ok':'warn');
+  if (ok > 0) {
+    setTimeout(() => {
+      if (window.FS && window.FS.syncfs) {
+        window.FS.syncfs(true, err => {
+          if (err) mlog('FS.syncfs error: '+err,'warn');
+          else     mlog('FS synced ✓','ok');
+        });
       }
-    })();
+    }, 1500);
+  }
+}
+
+function openOrCreate(dbName, storeName) {
+  return new Promise((resolve, reject) => {
+    const probe = indexedDB.open(dbName);
+    probe.onsuccess = () => {
+      const db=probe.result, ver=db.version, has=db.objectStoreNames.contains(storeName); db.close();
+      const req = indexedDB.open(dbName, has?ver:ver+1);
+      if (!has) req.onupgradeneeded = e => e.target.result.createObjectStore(storeName,{keyPath:'filename'});
+      req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
+    };
+    probe.onerror = () => {
+      const req = indexedDB.open(dbName, 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore(storeName,{keyPath:'filename'});
+      req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
+    };
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GAME RELOAD
+// ═══════════════════════════════════════════════════════════════
+async function reloadGame() {
+  mlog('Reloading Unity…','hi');
+  if (unityInstance) {
+    try { await unityInstance.Quit(); } catch(e) { mlog('Quit warn: '+e.message,'warn'); }
+    unityInstance = null;
+  }
+  const oldCv = document.getElementById('unity-canvas');
+  const newCv = document.createElement('canvas');
+  newCv.id = 'unity-canvas';
+  newCv.style.cssText = 'position:absolute;top:0;left:0;width:100vw;height:100vh;image-rendering:pixelated';
+  oldCv.parentNode.replaceChild(newCv, oldCv);
+  cv = newCv;
+  _blobUrls.forEach(u => URL.revokeObjectURL(u)); _blobUrls.clear();
+  const rld = document.createElement('div');
+  rld.id = 'rld-overlay';
+  rld.style.cssText = 'position:fixed;inset:0;background:#000;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px';
+  rld.innerHTML = '<div style="font-size:36px;color:#c8a96e;animation:breathe 2.4s ease-in-out infinite">⚔</div>'
+    +'<h1 style="color:#c8a96e;font:700 22px Cinzel,serif;letter-spacing:7px">Hollow Knight</h1>'
+    +'<div style="width:280px;height:1px;background:#181818"><div id="rld-fill" style="height:100%;background:linear-gradient(90deg,#a07840,#e8c98e);width:0%;transition:width .15s"></div></div>'
+    +'<div id="rld-pct" style="color:#3a3a3a;font-size:9px;letter-spacing:3px">0%</div>'
+    +'<div id="rld-sub" style="color:#444;font-size:9px;letter-spacing:1.5px">Reloading…</div>';
+  document.body.appendChild(rld);
+  _lb=0; _te=TOTAL_MB*1048576;
+  const setP   = v => { const f=document.getElementById('rld-fill'),t=document.getElementById('rld-pct'); if(f)f.style.width=Math.min(100,Math.round(v))+'%'; if(t)t.textContent=Math.min(100,Math.round(v))+'%'; };
+  const setSub = m => { const el=document.getElementById('rld-sub'); if(el)el.textContent=m; };
+  try {
+    await launchUnity(rld, setP, setSub, async () => {
+      mlog('Unity reloaded ⚔','ok');
+      mlog(C.preset+'|'+RES[Math.min(C.resolution,RES.length-1)].l+'|'+C.memory+'MB','hi');
+      setTimeout(fireGP, 4000);
+      await checkPendingInject();
+    });
+  } catch(e) {
+    mlog('Reload error: '+e.message,'err');
+    setSub('Error — open Log tab');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AUDIO CONTEXT UNLOCK
+// ═══════════════════════════════════════════════════════════════
+(()=>{
+  const resume = () => {
+    if (window._actxUnlocked) return;
+    const ctx = window.AudioContext || window.webkitAudioContext;
+    if (ctx) {
+      const _AC=ctx, key=ctx===window.AudioContext?'AudioContext':'webkitAudioContext';
+      window[key]=function(...a){const c=new _AC(...a);if(c.state==='suspended')c.resume().catch(()=>{});return c;};
+    }
+    window._actxUnlocked=true;
+  };
+  ['pointerdown','keydown','touchstart'].forEach(e => window.addEventListener(e, resume, {once:true,capture:true}));
+})();
+
+// FS sync dedup
+(()=>{
+  let _syncing = false;
+  window._patchFSSync = () => {
+    if (!window.FS || window.FS._patched) return;
+    window.FS._patched = true;
+    const orig = window.FS.syncfs;
+    window.FS.syncfs = function(populate, cb) {
+      if (_syncing) { if(cb) cb(null); return; }
+      _syncing = true;
+      orig.call(window.FS, populate, err => { _syncing=false; if(cb) cb(err); });
+    };
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════════
+//  UNITY LAUNCHER
+// ═══════════════════════════════════════════════════════════════
+function buildUnityConfig(dataUrl, wasmBuf, fwUrl) {
+  return {
+    dataUrl, frameworkUrl:fwUrl,
+    instantiateWasm(imports, onSuccess) {
+      WebAssembly.instantiate(wasmBuf, imports)
+        .then(r => onSuccess(r.instance, r.module))
+        .catch(e => mlog('WASM error: '+e,'err'));
+      return {};
+    },
+    streamingAssetsUrl: cdnUrl('StreamingAssets'),
+    companyName:'Team Cherry', productName:'Hollow Knight', productVersion:'1.0',
+    devicePixelRatio: C.dpiScale,
+    matchWebGLToCanvasSize: false,
+    memory: C.memory * 1024 * 1024,
+    captureAllKeyboardInput: C.captureAllKeyboardInput,
+    webglContextAttributes: {
+      antialias:C.antialias, alpha:false, depth:C.depth, stencil:C.stencil,
+      premultipliedAlpha:false, preserveDrawingBuffer:C.preserveDrawingBuffer,
+      desynchronized:C.desynchronized, powerPreference:C.powerPreference,
+      failIfMajorPerformanceCaveat:false,
+    }
+  };
+}
+
+async function launchUnity(loadingEl, setProgress, setSubtitle, onReady) {
+  setSubtitle('Loading game files…');
+  const [dataBuf, wasmBuf, fwBuf, ldrBuf] = await Promise.all([
+    fetchPartsParallel('Build/hktruffled.data', 1, 45),
+    fetchPartsParallel('Build/hktruffled.wasm', 1, 2),
+    fetchWithProgress('Build/hktruffled.framework.js'),
+    fetchWithProgress('Build/hktruffled.loader.js'),
+  ]);
+  const dataUrl = URL.createObjectURL(new Blob([dataBuf])); _blobUrls.add(dataUrl);
+  const fwUrl   = URL.createObjectURL(new Blob([fwBuf], {type:'application/javascript'})); _blobUrls.add(fwUrl);
+  setSubtitle('Starting engine…'); setProgress(99);
+  if (typeof window.createUnityInstance === 'undefined') {
+    const ldrUrl = URL.createObjectURL(new Blob([ldrBuf],{type:'application/javascript'})); _blobUrls.add(ldrUrl);
+    const sc = document.createElement('script'); sc.src=ldrUrl; sc.dataset.hkLoader='1';
+    await new Promise((resolve, reject) => {
+      sc.onload  = resolve;
+      sc.onerror = () => reject(new Error('Loader script failed'));
+      document.body.appendChild(sc);
+    });
+  }
+  setProgress(100);
+  const inst = await createUnityInstance(cv, buildUnityConfig(dataUrl, wasmBuf, fwUrl));
+  unityInstance = inst;
+  window._patchFSSync?.();
+  loadingEl.style.transition = 'opacity .5s';
+  loadingEl.style.opacity    = '0';
+  setTimeout(() => { if(loadingEl.parentNode) loadingEl.remove(); }, 600);
+  applyRes();
+  await onReady();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INPUT GUARDS
+// ═══════════════════════════════════════════════════════════════
+['keydown','keyup','keypress'].forEach(event => {
+  window.addEventListener(event, e => {
+    const isInput = document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+    if (isInput) e.stopImmediatePropagation();
+  }, true);
+});
+
+document.addEventListener('pointerdown', e => {
+  const panel = document.getElementById('panel');
+  if (!panel.classList.contains('open')) return;
+  if (!panel.contains(e.target) && e.target !== document.getElementById('handle')) {
+    panel.classList.remove('open');
+    document.getElementById('handle').classList.remove('open');
+    cv.focus();
+  }
+}, true);
+
+setTimeout(() => {
+  const t = document.getElementById('session-toast');
+  t.style.display='block'; requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.style.display='none',400); },8000);
+}, 45*60*1000);
+
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  const m=document.createElement('meta');
+  m.name='viewport'; m.content='width=device-width,height=device-height,initial-scale=1,user-scalable=no';
+  document.head.appendChild(m);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════
+(async()=>{
+  await openMDB();
+  await cfgLoad();
+  await loadSlots();
+  syncUI();
+
+  try {
+    const cvt=document.createElement('canvas');
+    const gl=cvt.getContext('webgl')||cvt.getContext('experimental-webgl');
+    if (gl) {
+      const ext=gl.getExtension('WEBGL_debug_renderer_info');
+      if (ext) document.getElementById('inf-gpu').textContent=(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)||'unknown').substring(0,28);
+    }
+  } catch(e) {}
+
+  cv.style.cssText='position:absolute;top:0;left:0;width:100vw;height:100vh;image-rendering:pixelated';
+  const idx=Math.min(C.resolution,RES.length-1);
+  cv.width =Math.round(window.innerWidth *RES[idx].v*(C.dpiScale||1));
+  cv.height=Math.round(window.innerHeight*RES[idx].v*(C.dpiScale||1));
+
+  _te=TOTAL_MB*1048576;
+  const lsEl=document.getElementById('ls');
+  try {
+    await launchUnity(
+      lsEl,
+      p  => { const v=Math.min(100,Math.round(p)); document.getElementById('ls-fill').style.width=v+'%'; document.getElementById('ls-pct').textContent=v+'%'; },
+      m  => document.getElementById('ls-sub').textContent=m,
+      async () => {
+        mlog('Unity ready ⚔','ok');
+        mlog(C.preset+'|'+RES[idx].l+'|'+C.memory+'MB','hi');
+        mlog('Source: '+SOURCES[_srcIdx].name,'info');
+        setTimeout(fireGP, 4000);
+        setTimeout(()=>autoCacheAll().catch(e=>mlog('Cache error: '+e.message,'err')), 3000);
+        await checkPendingInject();
+      }
+    );
+  } catch(e) {
+    mlog('Boot error: '+e.message,'err');
+    const sub=document.getElementById('ls-sub');
+    sub.textContent='Error — open Log tab';
+    sub.style.color='#ef5350';
+  }
+})();
 </script>
 </body>
 </html>
