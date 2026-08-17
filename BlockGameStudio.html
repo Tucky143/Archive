@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlockGame Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+/* ── Child-friendly, bright, playful ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --bg:#f5f5ff;--panel:#eef0ff;--surface:#e2e4ff;--surface2:#cdcfff;--border:#b8bad8;--border2:#9a9cc0;
+  --accent:#7c4dff;--accent2:#651fff;--green:#00c853;--pink:#ff4081;--amber:#ffab00;--blue:#448aff;
+  --purple:#e040fb;--orange:#ff6e40;--text:#1a1a3a;--muted:#555577;--dim:#d0d2e8;
+  --radius:12px;--radius-lg:18px;
+  --font:'Nunito',sans-serif;--mono:'Nunito',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;}
+#app{display:grid;grid-template-rows:56px 1fr;grid-template-columns:220px 1fr 440px;height:100vh;overflow:hidden}
+#hdr{grid-column:1/-1;display:flex;align-items:center;padding:0 20px;gap:12px;background:var(--panel);border-bottom:2px solid var(--border);z-index:100}
+#logo{font-weight:900;font-size:20px;color:var(--accent);display:flex;align-items:center;gap:8px}
+#logo svg{width:30px;height:30px}
+.vsep{width:2px;height:30px;background:var(--border);border-radius:1px}
+.hbtn{font-family:var(--font);font-size:14px;font-weight:700;padding:8px 18px;border-radius:var(--radius);border:2px solid var(--border);cursor:pointer;background:var(--surface);color:var(--text);transition:.15s;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+.hbtn:hover{background:var(--surface2);border-color:var(--border2);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.hbtn:active{transform:scale(0.96)}
+.hbtn.primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 8px rgba(124,77,255,0.3)}
+.hbtn.primary:hover{filter:brightness(1.15)}
+.hbtn.danger{background:rgba(255,64,129,0.12);color:var(--pink);border-color:rgba(255,64,129,0.4)}
+.hbtn.danger:hover{background:rgba(255,64,129,0.25)}
+.hbtn.success{background:rgba(0,200,83,0.12);color:var(--green);border-color:rgba(0,200,83,0.4)}
+.hbtn.success:hover{background:rgba(0,200,83,0.25)}
+.hbtn.warn{background:rgba(255,171,0,0.12);color:var(--amber);border-color:rgba(255,171,0,0.4)}
+.hbtn.warn:hover{background:rgba(255,171,0,0.25)}
+#status-pill{font-size:12px;font-weight:700;padding:4px 14px;border-radius:20px;text-transform:uppercase;letter-spacing:.05em;border:2px solid var(--border);background:var(--dim);color:var(--muted);transition:.2s}
+#status-pill.run{background:rgba(0,200,83,.15);color:var(--green);border-color:rgba(0,200,83,.5)}
+#status-pill.err{background:rgba(255,64,129,.15);color:var(--pink);border-color:rgba(255,64,129,.5)}
+.ml{margin-left:auto}.hdiv{display:flex;gap:8px;align-items:center}
+#sidebar{display:flex;flex-direction:column;border-right:2px solid var(--border);background:var(--panel);overflow:hidden}
+.sidebar-sec{font-size:12px;font-weight:900;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;padding:14px 16px 8px;display:flex;align-items:center;gap:8px}
+.sidebar-sec button{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--muted);font-size:22px;padding:0 6px;border-radius:8px}
+.sidebar-sec button:hover{color:var(--accent);background:var(--surface)}
+#file-tree{flex:1;overflow-y:auto;padding:4px 10px}
+.file-item{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:var(--radius);cursor:pointer;transition:background .1s;font-weight:700;font-size:14px}
+.file-item:hover{background:var(--surface)}
+.file-item.active{background:var(--surface2);color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.file-item .fi-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-item .fi-icon{font-size:18px;flex-shrink:0;color:var(--muted)}
+.file-item .fi-actions{display:none;gap:4px}
+.file-item:hover .fi-actions{display:flex}
+.fi-btn{background:none;border:none;cursor:pointer;color:var(--muted);padding:3px;border-radius:6px;font-size:16px}
+.fi-btn:hover{color:var(--pink)}
+#editor-tabs{display:flex;background:var(--panel);border-bottom:2px solid var(--border);flex-shrink:0;overflow-x:auto;min-height:42px}
+.ed-tab{font-family:var(--font);font-weight:700;font-size:13px;padding:8px 18px;cursor:pointer;color:var(--muted);border-right:2px solid var(--border);white-space:nowrap;display:flex;align-items:center;gap:8px;flex-shrink:0;transition:color .15s}
+.ed-tab:hover{color:var(--text)}
+.ed-tab.active{color:var(--accent);background:var(--surface);border-bottom:3px solid var(--accent)}
+.ed-tab .tab-close{font-size:18px;padding:0 6px;border-radius:4px}
+.ed-tab .tab-close:hover{color:var(--pink)}
+#view-switcher{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);border-bottom:2px solid var(--border);flex-shrink:0}
+.vs-btn{font-family:var(--font);font-weight:700;font-size:13px;letter-spacing:.03em;padding:6px 16px;border-radius:var(--radius);border:2px solid transparent;cursor:pointer;background:none;color:var(--muted);transition:.15s}
+.vs-btn.active{background:var(--surface2);color:var(--accent);border-color:var(--border2);box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+.vs-btn:hover:not(.active){color:var(--text)}
+#api-search-wrap{margin-left:auto;position:relative;display:flex;align-items:center;gap:5px}
+#api-search{background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--mono);font-size:13px;padding:6px 12px 6px 32px;width:200px;outline:none;transition:border-color .2s}
+#api-search:focus{border-color:var(--accent)}
+#api-search-icon{position:absolute;left:10px;color:var(--muted);font-size:16px;pointer-events:none}
+#api-search-results{position:absolute;top:calc(100%+8px);right:0;width:360px;background:var(--surface);border:2px solid var(--border2);border-radius:var(--radius-lg);box-shadow:0 16px 48px rgba(0,0,0,0.3);z-index:500;overflow:hidden;display:none;max-height:300px;overflow-y:auto}
+#api-search-results.open{display:block}
+.sr-item{padding:8px 14px;cursor:pointer;display:flex;flex-direction:column;gap:3px;border-bottom:2px solid var(--border);transition:background .1s}
+.sr-item:last-child{border:none}
+.sr-item:hover{background:var(--surface2)}
+.sr-name{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--text)}
+.sr-sig{font-family:var(--mono);font-size:11px;color:var(--accent);opacity:.8}
+.sr-desc{font-size:12px;color:var(--muted)}
+.sr-cat-badge{font-size:10px;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.05em;margin-left:auto;flex-shrink:0;font-weight:700}
+#editor-panes{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.pane{position:absolute;inset:0;display:none}
+.pane.active{display:flex;flex-direction:column}
+#blockly-pane{flex-direction:column}
+#blocklyDiv{flex:1;width:100%;min-height:0}
+.blocklyMainBackground{fill:var(--panel)!important}
+.blocklyToolboxDiv{background:var(--bg)!important;border-right:2px solid var(--border)!important}
+.blocklyFlyoutBackground{fill:var(--panel)!important}
+.blocklyText{font-family:var(--mono)!important}
+#code-pane{flex-direction:column;position:relative}
+#code-editor{flex:1;width:100%;background:var(--panel);color:var(--text);font-family:var(--mono);font-size:15px;line-height:1.7;border:none;resize:none;padding:20px;outline:none;tab-size:2;overflow:auto;font-weight:500}
+#code-editor::selection{background:rgba(124,77,255,.3)}
+#code-editor:focus{box-shadow:inset 0 0 0 3px var(--accent)}
+#autocomplete{position:fixed;z-index:9999;background:var(--surface);border:2px solid var(--border2);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(0,0,0,0.3);min-width:300px;max-height:200px;overflow-y:auto;display:none}
+#autocomplete.open{display:block}
+.ac-item{padding:8px 14px;cursor:pointer;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;font-family:var(--mono);font-weight:700;font-size:12px;border-bottom:2px solid var(--border)}
+.ac-item:last-child{border:none}
+.ac-item.sel,.ac-item:hover{background:var(--surface2)}
+.ac-badge{font-size:10px;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;font-weight:700}
+.ac-desc{font-size:11px;color:var(--muted)}
+#sync-banner{flex-shrink:0;background:rgba(124,77,255,.07);border-top:2px solid rgba(124,77,255,.2);padding:5px 16px;font-family:var(--mono);font-size:11px;color:var(--accent);display:flex;align-items:center;gap:8px;font-weight:700}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.2;transform:scale(.8)}}
+#preview-area{display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
+#preview-header{padding:8px 16px;border-bottom:2px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+#preview-label{font-size:14px;font-weight:900;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+#preview-size{font-size:13px;color:var(--muted);margin-left:auto;font-weight:700}
+#preview-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(45deg,var(--bg) 0,var(--bg) 10px,var(--panel) 10px,var(--panel) 20px);overflow:hidden}
+#game-frame{border-radius:var(--radius);border:2px solid var(--border);overflow:hidden;background:#000;position:relative;width:480px;height:360px;flex-shrink:0;box-shadow:0 0 0 3px rgba(124,77,255,.15)}
+#phaser-mount{width:100%;height:100%;position:relative}
+#phaser-mount canvas{width:100%!important;height:100%!important;display:block}
+#game-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:none;background:rgba(245,245,255,.85)}
+#game-empty .ico{font-size:48px;opacity:.3}
+#game-empty p{font-family:var(--mono);font-size:14px;color:var(--muted);text-align:center;font-weight:700}
+#console-wrap{flex-shrink:0;height:130px;display:flex;flex-direction:column;border-top:2px solid var(--border);background:var(--bg)}
+#console-hdr{display:flex;align-items:center;padding:4px 14px;background:var(--surface);border-bottom:2px solid var(--border);flex-shrink:0}
+#console-hdr span{font-size:11px;font-weight:900;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+#console-clear{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;padding:4px 8px;border-radius:6px}
+#console-clear:hover{color:var(--text)}
+#console{flex:1;overflow-y:auto;padding:6px 16px;font-family:var(--mono);font-size:13px;line-height:1.8}
+.cl{color:var(--muted)}.cl.i{color:var(--green)}.cl.e{color:var(--pink)}.cl.w{color:var(--amber)}.cl.s{color:var(--accent)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;display:flex;align-items:center;justify-content:center;display:none}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border:2px solid var(--border2);border-radius:var(--radius-lg);padding:24px;width:420px;max-width:90%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal h3{font-size:18px;font-weight:900;margin-bottom:16px;color:var(--text)}
+.modal input,.modal select{width:100%;background:var(--panel);border:2px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--mono);font-size:13px;padding:10px 14px;outline:none;margin-bottom:12px}
+.modal input:focus,.modal select:focus{border-color:var(--accent)}
+.modal-btns{display:flex;justify-content:flex-end;gap:10px;margin-top:10px}
+.modal-btns .hbtn{font-size:14px}
+*::-webkit-scrollbar{width:6px;height:6px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+@media(max-width:1024px){#app{grid-template-columns:180px 1fr 340px}#api-search{width:150px}}
+@media(max-width:768px){#app{grid-template-columns:1fr;grid-template-rows:56px auto 1fr 300px}#sidebar{display:none}#preview-area{border-top:2px solid var(--border)}#game-frame{width:320px;height:240px}}
+#loading{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:9999;font-family:var(--mono);font-size:18px;color:var(--muted);gap:20px;font-weight:700}
+#loading .spinner{width:44px;height:44px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}#loading.done{display:none}
+#toggle-console{position:absolute;top:0;right:0;z-index:5;background:var(--surface);border:2px solid var(--border);border-radius:0 0 0 var(--radius);padding:4px 10px;cursor:pointer;font-size:14px;font-weight:700;color:var(--muted)}
+#toggle-console:hover{background:var(--surface2)}
+.hidden-console #console-wrap{display:none}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spinner"></div><span>Loading BlockGame Studio…</span></div>
+
+<div id="app" style="display:none">
+  <div id="hdr">
+    <div id="logo"><svg viewBox="0 0 24 24" fill="none"><rect x="1" y="1" width="10" height="10" rx="3" fill="#7c4dff"/><rect x="13" y="1" width="10" height="10" rx="3" fill="#ff4081"/><rect x="1" y="13" width="10" height="10" rx="3" fill="#00c853"/><rect x="13" y="13" width="10" height="10" rx="3" fill="#ffab00"/></svg>BlockGame Studio</div>
+    <div class="vsep"></div>
+    <span id="status-pill">idle</span>
+    <div class="vsep"></div>
+    <div class="hdiv">
+      <button class="hbtn" id="btn-new-project">🎮 New</button>
+      <button class="hbtn" id="btn-import">📂 Open</button>
+      <button class="hbtn" id="btn-export">💾 Save</button>
+      <button class="hbtn" id="btn-tutorial">❓ Help</button>
+      <button class="hbtn" id="btn-settings">⚙️</button>
+    </div>
+    <div class="ml hdiv">
+      <button class="hbtn danger" id="btn-stop">⏹ Stop</button>
+      <button class="hbtn success" id="btn-run">▶ Play</button>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div class="sidebar-sec">📁 My Files <button id="btn-add-file">＋</button></div>
+    <div id="file-tree"></div>
+  </div>
+
+  <div id="editor-area">
+    <div id="editor-tabs"></div>
+    <div id="view-switcher">
+      <button class="vs-btn active" data-view="blocks">🧩 Blocks</button>
+      <button class="vs-btn" data-view="code">✏️ Code</button>
+      <div id="api-search-wrap">
+        <span id="api-search-icon">🔍</span>
+        <input id="api-search" type="text" placeholder="Search blocks…">
+        <div id="api-search-results"></div>
+      </div>
+    </div>
+    <div id="editor-panes">
+      <div class="pane active" id="blockly-pane"><div id="blocklyDiv"></div></div>
+      <div class="pane" id="code-pane">
+        <textarea id="code-editor" spellcheck="false"></textarea>
+        <div id="autocomplete"></div>
+        <div id="sync-banner"><span class="pulse"></span> Blocks ↔ Code · Drag blocks to build!</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="preview-area">
+    <div id="preview-header"><span id="preview-label">🖥 Preview</span><span id="preview-size">480 × 360</span></div>
+    <div id="preview-wrap">
+      <div id="game-frame">
+        <div id="phaser-mount"></div>
+        <div id="game-empty"><div class="ico">🎮</div><p>Press ▶ Play<br>to see your game!</p></div>
+      </div>
+    </div>
+    <div id="console-wrap">
+      <div id="console-hdr"><span>📋 Console</span><button id="console-clear">🗑 clear</button><button id="toggle-console">▲ hide</button></div>
+      <div id="console"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-new-file"><div class="modal"><h3>✨ New File</h3><input type="text" id="new-file-name" value="main.js"><select id="new-file-type"><option value="js">JavaScript file</option><option value="scene">🎬 Game Scene</option></select><div class="modal-btns"><button class="hbtn" id="new-file-cancel">Cancel</button><button class="hbtn primary" id="new-file-ok">Create</button></div></div></div>
+<div class="modal-bg" id="modal-new-project"><div class="modal"><h3>🆕 New Game</h3><input type="text" id="new-proj-name" value="My Game"><div class="modal-btns"><button class="hbtn" id="new-proj-cancel">Cancel</button><button class="hbtn primary" id="new-proj-ok">Create</button></div></div></div>
+<div class="modal-bg" id="modal-tutorial"><div class="modal"><h3>❓ How to play</h3>
+  <p style="font-size:14px;line-height:1.6;margin-bottom:12px;">🧩 <b>Drag blocks</b> from the toolbox to the canvas.<br>🎮 Press ▶ <b>Play</b> to test your game.<br>💾 <b>Save</b> exports all your files as a zip.<br>📂 <b>Open</b> imports a saved zip.<br>🔍 Use the search bar to find any game command!</p>
+  <div class="modal-btns"><button class="hbtn primary" id="tutorial-close">Got it! 🚀</button></div></div></div>
+<div class="modal-bg" id="modal-settings"><div class="modal"><h3>⚙️ Settings</h3><label style="font-size:13px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">Preview Size</label><select id="preview-size-select"><option value="320x240">320×240</option><option value="480x360" selected>480×360</option><option value="640x480">640×480</option><option value="800x600">800×600</option></select><label style="font-size:13px;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Theme</label><select id="theme-select"><option value="light" selected>☀️ Bright</option><option value="dark">🌙 Dark</option></select><div class="modal-btns"><button class="hbtn" id="settings-close">Close</button></div></div></div>
+
+<input type="file" id="import-input" accept=".zip,.json" style="display:none">
+
+<script>
+'use strict';
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: Dom — tiny helper, avoids repeating getElementById
+   ════════════════════════════════════════════════════════════════ */
+const Dom = (() => {
+  const cache = new Map();
+  function $(id) {
+    if (!cache.has(id)) cache.set(id, document.getElementById(id));
+    return cache.get(id);
+  }
+  return { $ };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: Html — tagged template that builds markup strings for
+   innerHTML without ever writing a literal open-angle-bracket plus
+   tag name in this file's source. Some hosts (Google Apps Script's
+   HtmlService via createHtmlOutputFromFile chief among them)
+   tokenize the ENTIRE raw .html file before serving it — not just
+   markup outside the real page script — and react to any tag-shaped
+   text found anywhere in the source, including plain JS string
+   literals. Write markup as html`${LT}div>...${LT}/div>` (using the
+   exported LT constant) and nothing tag-shaped ever appears
+   contiguously in the source file.
+   ════════════════════════════════════════════════════════════════ */
+const Html = (() => {
+  const LT = String.fromCharCode(60); // "<" — never write the literal character before a tag name
+  function raw(strings, ...values) {
+    return strings.reduce((out, str, i) => out + str + (i < values.length ? values[i] : ''), '');
+  }
+  return { LT, raw };
+})();
+
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: Log — console panel + status pill
+   ════════════════════════════════════════════════════════════════ */
+const Log = (() => {
+  const MAX_LINES = 200;
+  let consoleEl, statusPill;
+
+  function init() {
+    consoleEl = Dom.$('console');
+    statusPill = Dom.$('status-pill');
+  }
+
+  function write(msg, cls = '') {
+    const line = document.createElement('div');
+    
+    // Fixed: Using a template literal resolves quote issues and missing spaces
+    line.className = cls ? `cl ${cls}` : 'cl';
+    
+    const time = new Date().toLocaleTimeString('en', { 
+      hour12: false, 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+    
+    line.textContent = `[${time}] ${msg}`;
+    
+    consoleEl.appendChild(line);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+    
+    while (consoleEl.children.length > MAX_LINES) {
+      consoleEl.removeChild(consoleEl.firstChild);
+    }
+  }
+
+  function clear() { 
+    consoleEl.innerHTML = ''; 
+  }
+
+  function setStatus(state) {
+    statusPill.className = '';
+    
+    if (state === 'run') { 
+      statusPill.classList.add('run'); 
+      statusPill.textContent = 'running'; 
+    } else if (state === 'err') { 
+      statusPill.classList.add('err'); 
+      statusPill.textContent = 'error'; 
+    } else if (state === 'stopped') { 
+      statusPill.textContent = 'idle'; 
+    } else {
+      statusPill.textContent = state || 'idle';
+    }
+  }
+
+  return { init, write, clear, setStatus, info: m => write(m, 'i'), warn: m => write(m, 'w'), error: m => write(m, 'e'), success: m => write(m, 's') };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: ApiCatalog — pure data: every block/snippet definition
+   ════════════════════════════════════════════════════════════════ */
+const ApiCatalog = (() => {
+  const groups = [
+    { cat: 'draw', label: '🎨 Draw', color: '#ff7043', items: [
+      { name: 'add.rectangle', sig: 'this.add.rectangle(x,y,w,h,color)', desc: 'Filled rectangle', snippet: "const rect=this.add.rectangle(200,150,80,60,0xff7043);" },
+      { name: 'add.circle', sig: 'this.add.circle(x,y,radius,color)', desc: 'Filled circle', snippet: "const ball=this.add.circle(200,150,40,0x00c853);" },
+      { name: 'add.triangle', sig: 'this.add.triangle(x,y,x1,y1,x2,y2,x3,y3,color)', desc: 'Filled triangle', snippet: "const tri=this.add.triangle(200,150,0,40,40,-40,-40,-40,0xffab00);" },
+      { name: 'add.text', sig: "this.add.text(x,y,'text',style)", desc: 'Text', snippet: "const label=this.add.text(100,50,'Hello!',{fontSize:'24px',color:'#ffffff'});" },
+      { name: 'add.graphics', sig: 'this.add.graphics()', desc: 'Drawing tool', snippet: "const g=this.add.graphics();\ng.fillStyle(0xff0000,1);\ng.fillRect(100,100,80,60);" }
+    ]},
+    { cat: 'move', label: '⚡ Movement', color: '#448aff', items: [
+      { name: 'setPosition', sig: 'obj.setPosition(x,y)', desc: 'Move object', snippet: "obj.setPosition(100,100);" },
+      { name: 'setVelocity', sig: 'obj.body.setVelocity(vx,vy)', desc: 'Set speed', snippet: "obj.body.setVelocity(150,-300);" },
+      { name: 'setVelocityX', sig: 'obj.body.setVelocityX(vx)', desc: 'Horizontal speed', snippet: "obj.body.setVelocityX(200);" },
+      { name: 'setVelocityY', sig: 'obj.body.setVelocityY(vy)', desc: 'Vertical speed', snippet: "obj.body.setVelocityY(-400);" },
+      { name: 'setGravityY', sig: 'obj.body.setGravityY(gy)', desc: 'Gravity', snippet: "obj.body.setGravityY(300);" },
+      { name: 'setBounce', sig: 'obj.body.setBounce(bx,by)', desc: 'Bounciness', snippet: "obj.body.setBounce(0.8,0.8);" },
+      { name: 'setCollideWorldBounds', sig: 'obj.body.setCollideWorldBounds(bool)', desc: 'Stay inside screen', snippet: "obj.body.setCollideWorldBounds(true);" }
+    ]},
+    { cat: 'input', label: '🎮 Controls', color: '#00c853', items: [
+      { name: 'createCursorKeys', sig: 'this.input.keyboard.createCursorKeys()', desc: 'Arrow keys', snippet: "const cursors=this.input.keyboard.createCursorKeys();" },
+      { name: 'addKey', sig: 'this.input.keyboard.addKey(keyCode)', desc: 'Custom key', snippet: "const keyW=this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);" },
+      { name: 'key.isDown', sig: 'key.isDown', desc: 'Key held down', snippet: "if(cursors.left.isDown){player.body.setVelocityX(-200);}" },
+      { name: 'JustDown', sig: 'Phaser.Input.Keyboard.JustDown(key)', desc: 'Key just pressed', snippet: "if(Phaser.Input.Keyboard.JustDown(cursors.up)){player.body.setVelocityY(-400);}" },
+      { name: 'on.pointerdown', sig: "this.input.on('pointerdown',cb)", desc: 'Click / tap', snippet: "this.input.on('pointerdown',(ptr)=>{console.log(ptr.x,ptr.y);});" }
+    ]},
+    { cat: 'physics', label: '🧲 Collisions', color: '#e040fb', items: [
+      { name: 'physics.add.existing', sig: 'this.physics.add.existing(obj)', desc: 'Enable physics', snippet: "this.physics.add.existing(rect);" },
+      { name: 'physics.add.collider', sig: 'this.physics.add.collider(a,b,cb)', desc: 'Bump', snippet: "this.physics.add.collider(player,ground);" },
+      { name: 'physics.add.overlap', sig: 'this.physics.add.overlap(a,b,cb)', desc: 'Touch', snippet: "this.physics.add.overlap(player,coins,collectCoin,null,this);" },
+      { name: 'physics.add.staticGroup', sig: 'this.physics.add.staticGroup()', desc: 'Solid floor', snippet: "const platforms=this.physics.add.staticGroup();\nplatforms.create(200,280,'ground');" }
+    ]},
+    { cat: 'tweens', label: '✨ Effects', color: '#ffab00', items: [
+      { name: 'tweens.add', sig: 'this.tweens.add(config)', desc: 'Animate', snippet: "this.tweens.add({targets:rect,x:300,duration:1000,ease:'Power2'});" },
+      { name: 'tweens.add.yoyo', sig: 'this.tweens.add({yoyo:true,repeat:-1})', desc: 'Bounce effect', snippet: "this.tweens.add({targets:rect,alpha:0,duration:500,yoyo:true,repeat:-1});" },
+      { name: 'tweens.add.loop', sig: 'this.tweens.add({repeat:-1})', desc: 'Spin forever', snippet: "this.tweens.add({targets:obj,angle:360,duration:2000,repeat:-1});" }
+    ]},
+    { cat: 'time', label: '⏱ Timers', color: '#00bfa5', items: [
+      { name: 'time.addEvent', sig: 'this.time.addEvent(config)', desc: 'Repeat event', snippet: "this.time.addEvent({delay:1000,loop:true,callback:()=>{spawnEnemy();}});" },
+      { name: 'time.delayedCall', sig: 'this.time.delayedCall(delay,cb)', desc: 'Wait then do', snippet: "this.time.delayedCall(3000,()=>{this.scene.start('GameOver');});" }
+    ]},
+    { cat: 'objects', label: '🔧 Object', color: '#ff4081', items: [
+      { name: 'setAlpha', sig: 'obj.setAlpha(value)', desc: 'Transparency', snippet: "obj.setAlpha(0.5);" },
+      { name: 'setScale', sig: 'obj.setScale(sx,sy)', desc: 'Size', snippet: "obj.setScale(2,2);" },
+      { name: 'setAngle', sig: 'obj.setAngle(degrees)', desc: 'Rotate', snippet: "obj.setAngle(45);" },
+      { name: 'setVisible', sig: 'obj.setVisible(bool)', desc: 'Show / hide', snippet: "obj.setVisible(false);" },
+      { name: 'destroy', sig: 'obj.destroy()', desc: 'Remove', snippet: "obj.destroy();" },
+      { name: 'setText', sig: "textObj.setText('value')", desc: 'Change text', snippet: "label.setText('Score: 0');" }
+    ]},
+    { cat: 'math', label: '🔢 Math', color: '#7c4dff', items: [
+      { name: 'Math.Between', sig: 'Phaser.Math.Between(min,max)', desc: 'Random integer', snippet: "Phaser.Math.Between(0,100)" },
+      { name: 'Math.Clamp', sig: 'Phaser.Math.Clamp(value,min,max)', desc: 'Limit range', snippet: "Phaser.Math.Clamp(x,0,400)" },
+      { name: 'Math.Distance.Between', sig: 'Phaser.Math.Distance.Between(x1,y1,x2,y2)', desc: 'Distance', snippet: "Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y)" }
+    ]}
+  ];
+
+  // Flattened, search-friendly index built once.
+  const flat = [];
+  groups.forEach(g => g.items.forEach(item => flat.push({ ...item, catLabel: g.label, color: g.color })));
+
+  function search(query, limit = 10) {
+    const q = query.toLowerCase();
+    return flat.filter(it =>
+      it.name.toLowerCase().includes(q) ||
+      it.sig.toLowerCase().includes(q) ||
+      it.desc.toLowerCase().includes(q)
+    ).slice(0, limit);
+  }
+
+  function blockTypeFor(name) { return 'p_' + name.replace(/[^a-zA-Z0-9]/g, '_'); }
+
+  return { groups, flat, search, blockTypeFor };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: ProjectStore — single source of truth + persistence
+   ════════════════════════════════════════════════════════════════ */
+const ProjectStore = (() => {
+  const STORAGE_KEY = 'blockgame_kid';
+  const SCENE_TEMPLATE =
+    `function create(){\n  this.cameras.main.setBackgroundColor('#bbdefb');\n  const hello=this.add.text(240,180,'🎮 Hello!',{fontSize:'32px',color:'#ffffff',fontFamily:'Nunito'}).setOrigin(0.5);\n}\nfunction update(time,delta){/* runs every frame */}`;
+  const JS_TEMPLATE = `// Helper code\n`;
+
+  const state = {
+    project: { name: 'My Game', files: {}, activeFile: null, blocklyStates: {} },
+    openTabs: [],
+    activeView: 'blocks',
+    settings: { previewWidth: 480, previewHeight: 360, theme: 'light' }
+  };
+
+  const listeners = new Set();
+  function onChange(fn) { listeners.add(fn); }
+  function emit(evt) { listeners.forEach(fn => fn(evt)); }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        name: state.project.name,
+        files: state.project.files,
+        activeFile: state.project.activeFile,
+        blocklyStates: state.project.blocklyStates,
+        openTabs: state.openTabs,
+        settings: state.settings
+      }));
+    } catch (e) { /* storage may be unavailable; fail silently */ }
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const d = JSON.parse(raw);
+      state.project.name = d.name || 'My Game';
+      state.project.files = d.files || {};
+      state.project.activeFile = d.activeFile || null;
+      state.project.blocklyStates = d.blocklyStates || {};
+      state.openTabs = d.openTabs || [];
+      if (d.settings) state.settings = d.settings;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function ensureNonEmpty() {
+    if (!Object.keys(state.project.files).length) {
+      state.project.files = { 'main.js': SCENE_TEMPLATE };
+      state.project.activeFile = 'main.js';
+      state.project.blocklyStates = { 'main.js': null };
+      state.openTabs = ['main.js'];
+    }
+  }
+
+  function newProject(name) {
+    state.project = { name: name || 'My Game', files: { 'main.js': SCENE_TEMPLATE }, activeFile: 'main.js', blocklyStates: { 'main.js': null } };
+    state.openTabs = ['main.js'];
+    save();
+    emit({ type: 'project:new' });
+  }
+
+  function replaceProject(newProjectData) {
+    state.project = newProjectData;
+    state.openTabs = [];
+    const first = Object.keys(state.project.files)[0];
+    if (first) { state.openTabs.push(first); state.project.activeFile = first; }
+    save();
+    emit({ type: 'project:replaced' });
+  }
+
+  let autosaveTimer = null;
+  function startAutosave(intervalMs = 3000) {
+    if (autosaveTimer) clearInterval(autosaveTimer);
+    autosaveTimer = setInterval(save, intervalMs);
+  }
+
+  return {
+    state, SCENE_TEMPLATE, JS_TEMPLATE,
+    onChange, emit, save, load, ensureNonEmpty, newProject, replaceProject, startAutosave
+  };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: BlocklySetup — block/generator registration, toolbox, theme
+   ════════════════════════════════════════════════════════════════ */
+const BlocklySetup = (() => {
+  let workspace = null;
+
+  function registerCatalogBlocks() {
+    ApiCatalog.groups.forEach(g => {
+      g.items.forEach(item => {
+        const btype = ApiCatalog.blockTypeFor(item.name);
+        if (Blockly.Blocks[btype]) return;
+        Blockly.Blocks[btype] = {
+          init() {
+            this.setColour(g.color);
+            this.appendDummyInput().appendField(item.name);
+            this.appendDummyInput().appendField(new Blockly.FieldLabelSerializable(item.desc), 'DESC');
+            this.setTooltip(item.sig);
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+          }
+        };
+        Blockly.JavaScript.forBlock[btype] = () => item.snippet + '\n';
+      });
+    });
+  }
+
+  function registerStructuralBlocks() {
+    const wrappers = [
+      { type: 'gc', label: '🎬 create()', color: '#7c4dff', body: 'C' },
+      { type: 'gu', label: '🔄 update(time,delta)', color: '#7c4dff', body: 'U' },
+      { type: 'gp', label: '📥 preload()', color: '#7c4dff', body: 'P' },
+      { type: 'ifb', label: '❓ if (condition)', color: '#5a7aaa', body: 'IF' },
+      { type: 'whb', label: '🔁 while (condition)', color: '#5a9a5a', body: 'WH' },
+      { type: 'fob', label: '🔢 for (i=0;i<n;i++)', color: '#5a9a5a', body: 'FOR' }
+    ];
+    wrappers.forEach(w => {
+      Blockly.Blocks[w.type] = {
+        init() {
+          this.appendDummyInput().appendField(w.label);
+          this.appendStatementInput(w.body).setCheck(null);
+          this.setColour(w.color);
+          this.setPreviousStatement(true, null);
+          this.setNextStatement(true, null);
+        }
+      };
+      Blockly.JavaScript.forBlock[w.type] = block => {
+        const inner = Blockly.JavaScript.statementToCode(block, w.body);
+        switch (w.type) {
+          case 'gc': return `function create(){${inner}}\n`;
+          case 'gu': return `function update(time,delta){${inner}}\n`;
+          case 'gp': return `function preload(){${inner}}\n`;
+          case 'ifb': return `if(condition){${inner}}\n`;
+          case 'whb': return `while(condition){${inner}}\n`;
+          case 'fob': return `for(let i=0;i<10;i++){${inner}}\n`;
+          default: return inner;
+        }
+      };
+    });
+  }
+
+  function registerUtilityBlocks() {
+    Blockly.Blocks['vs'] = {
+      init() {
+        this.appendDummyInput()
+          .appendField('set').appendField(new Blockly.FieldVariable('myVar'), 'VAR')
+          .appendField('=').appendField(new Blockly.FieldTextInput('0'), 'VALUE');
+        this.setColour('#6a8af0');
+        this.setPreviousStatement(true, null);
+        this.setNextStatement(true, null);
+      }
+    };
+    Blockly.JavaScript.forBlock['vs'] = block => {
+      const v = Blockly.JavaScript.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+      return `${v}=${block.getFieldValue('VALUE')};\n`;
+    };
+
+    Blockly.Blocks['clog'] = {
+      init() {
+        this.appendDummyInput().appendField('📢 log').appendField(new Blockly.FieldTextInput('hello'), 'MSG');
+        this.setColour('#00c853');
+        this.setPreviousStatement(true, null);
+        this.setNextStatement(true, null);
+      }
+    };
+    Blockly.JavaScript.forBlock['clog'] = block => `console.log('${block.getFieldValue('MSG')}');\n`;
+
+    Blockly.Blocks['com'] = {
+      init() {
+        this.appendDummyInput().appendField('💬 // ').appendField(new Blockly.FieldTextInput('note'), 'TEXT');
+        this.setColour('#b0bec5');
+        this.setPreviousStatement(true, null);
+        this.setNextStatement(true, null);
+      }
+    };
+    Blockly.JavaScript.forBlock['com'] = block => `// ${block.getFieldValue('TEXT')}\n`;
+  }
+
+  // Builds one XML-ish element as a string without ever writing a literal
+  // open-angle-bracket-plus-name sequence in the source (see the Html
+  // module note above for why: GAS's HtmlService tokenizes the whole raw
+  // file, not just markup outside the real page script, and reacts to
+  // tag-shaped text anywhere in it, including inside what looks like a
+  // plain JS string).
+  function xmlEl(name, attrs, innerXml) {
+    const attrStr = attrs ? ' ' + Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ') : '';
+    const LT = String.fromCharCode(60); // "<"
+    if (innerXml === undefined) return `${LT}${name}${attrStr}/>`;
+    return `${LT}${name}${attrStr}>${innerXml}${LT}/${name}>`;
+  }
+
+  function buildToolboxXml() {
+    const blockEl = type => xmlEl('block', { type });
+    const categoryEl = (name, colour, inner, extraAttrs) => xmlEl('category', { name, colour, ...(extraAttrs || {}) }, inner);
+
+    let xml = '';
+    xml += categoryEl('🎬 Game Parts', '#7c4dff', blockEl('gp') + blockEl('gc') + blockEl('gu'));
+    ApiCatalog.groups.forEach(g => {
+      const blocks = g.items.map(i => blockEl(ApiCatalog.blockTypeFor(i.name))).join('');
+      xml += categoryEl(g.label, g.color, blocks);
+    });
+    xml += xmlEl('sep');
+    xml += categoryEl('📦 Variables', '#6a8af0', undefined, { custom: 'VARIABLE' });
+    xml += categoryEl('🧠 Logic', '#5C81A6', blockEl('controls_if') + blockEl('logic_compare') + blockEl('logic_operation') + blockEl('logic_boolean'));
+    xml += categoryEl('🔁 Loops', '#5C9A5C', blockEl('controls_repeat_ext') + blockEl('controls_whileUntil') + blockEl('controls_for') + blockEl('whb') + blockEl('fob'));
+    xml += categoryEl('🔢 Numbers', '#5C68A6', blockEl('math_number') + blockEl('math_arithmetic'));
+    xml += categoryEl('📝 Text', '#5CA68D', blockEl('text') + blockEl('text_join'));
+    xml += categoryEl('🔧 Utils', '#ffab00', blockEl('clog') + blockEl('com') + blockEl('ifb') + blockEl('vs'));
+    return xmlEl('xml', undefined, xml);
+  }
+
+  function defineTheme() {
+    return Blockly.Theme.defineTheme('kid', {
+      base: Blockly.Themes.Classic,
+      componentStyles: {
+        workspaceBackgroundColour: '#f5f5ff',
+        toolboxBackgroundColour: '#eef0ff',
+        toolboxForegroundColour: '#1a1a3a',
+        flyoutBackgroundColour: '#e2e4ff',
+        flyoutForegroundColour: '#1a1a3a',
+        flyoutOpacity: 1,
+        scrollbarColour: '#b8bad8',
+        markerColour: '#7c4dff',
+        cursorColour: '#7c4dff'
+      },
+      fontStyle: { family: 'Nunito, sans-serif', size: 13, weight: '700' }
+    });
+  }
+
+  function init(onWorkspaceChanged) {
+    try {
+      registerCatalogBlocks();
+      registerStructuralBlocks();
+      registerUtilityBlocks();
+      workspace = Blockly.inject('blocklyDiv', {
+        toolbox: buildToolboxXml(),
+        theme: defineTheme(),
+        grid: { spacing: 20, length: 3, colour: '#d0d2e8', snap: true },
+        move: { scrollbars: true, drag: true, wheel: true },
+        zoom: { controls: true, wheel: false, startScale: 0.85, maxScale: 2.5, minScale: 0.3, scaleSpeed: 1.1 },
+        trashcan: true,
+        sounds: false
+      });
+      workspace.addChangeListener(() => onWorkspaceChanged && onWorkspaceChanged());
+      const ro = new ResizeObserver(() => resize());
+      ro.observe(Dom.$('blocklyDiv'));
+    } catch (e) {
+      console.error('Blockly init error:', e);
+      Dom.$('blocklyDiv').innerHTML = `${Html.LT}p style="color:var(--pink);padding:20px;text-align:center;font-weight:700;">⚠️ Blockly failed.${Html.LT}br>Check the console.${Html.LT}/p>`;
+    }
+  }
+
+  function resize() { try { if (workspace) Blockly.svgResize(workspace); } catch (e) {} }
+  function clear() { try { if (workspace) workspace.clear(); } catch (e) {} }
+  function loadFromXmlText(xmlText) {
+    clear();
+    if (!xmlText) return;
+    try {
+      const xml = Blockly.utils.xml.textToDom(xmlText);
+      Blockly.Xml.domToWorkspace(xml, workspace);
+    } catch (e) { console.warn('Blockly load error:', e); }
+  }
+  function serializeToXmlText() {
+    try {
+      const xml = Blockly.Xml.workspaceToDom(workspace);
+      return Blockly.utils.xml.domToText(xml);
+    } catch (e) { return null; }
+  }
+  function generateCode() {
+    try { return Blockly.JavaScript.workspaceToCode(workspace); } catch (e) { return ''; }
+  }
+  function newBlockAt(blockType, x = 60, y = 60) {
+    if (!workspace) return null;
+    const blk = workspace.newBlock(blockType);
+    if (blk) { blk.initSvg(); blk.render(); blk.moveBy(x, y); }
+    return blk;
+  }
+  function getWorkspace() { return workspace; }
+
+  return { init, resize, clear, loadFromXmlText, serializeToXmlText, generateCode, newBlockAt, getWorkspace };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: FileManager — file tree, tabs, create/rename/delete/switch
+   ════════════════════════════════════════════════════════════════ */
+const FileManager = (() => {
+  const S = ProjectStore.state;
+  let fileTreeEl, tabsEl, codeEditorEl;
+
+  function init() {
+    fileTreeEl = Dom.$('file-tree');
+    tabsEl = Dom.$('editor-tabs');
+    codeEditorEl = Dom.$('code-editor');
+
+    fileTreeEl.addEventListener('click', e => {
+      const actionBtn = e.target.closest('.fi-btn');
+      if (actionBtn) {
+        const { action, file } = actionBtn.dataset;
+        if (action === 'delete') { if (confirm(`Delete "${file}"?`)) deleteFile(file); }
+        else if (action === 'rename') { const nn = prompt('Rename to:', file); if (nn) renameFile(file, nn); }
+        return;
+      }
+      const item = e.target.closest('.file-item');
+      if (item) openTab(item.dataset.file);
+    });
+
+    tabsEl.addEventListener('click', e => {
+      const closeBtn = e.target.closest('.tab-close');
+      if (closeBtn) { closeTab(closeBtn.dataset.file); return; }
+      const tab = e.target.closest('.ed-tab');
+      if (tab) openTab(tab.dataset.file);
+    });
+
+    codeEditorEl.addEventListener('input', () => {
+      if (S.project.activeFile) S.project.files[S.project.activeFile] = codeEditorEl.value;
+    });
+  }
+
+  function createFile(name, content) {
+    if (S.project.files[name]) { Log.warn(`File "${name}" exists`); return; }
+    S.project.files[name] = content;
+    if (!S.project.blocklyStates[name]) S.project.blocklyStates[name] = null;
+    renderFileTree(); openTab(name); ProjectStore.save();
+    Log.info(`Created: ${name}`);
+  }
+
+  function deleteFile(name) {
+    if (Object.keys(S.project.files).length <= 1) { Log.warn('Cannot delete last file'); return; }
+    delete S.project.files[name];
+    delete S.project.blocklyStates[name];
+    S.openTabs = S.openTabs.filter(t => t !== name);
+    if (S.project.activeFile === name) {
+      S.project.activeFile = S.openTabs[0] || Object.keys(S.project.files)[0];
+      if (S.project.activeFile && !S.openTabs.includes(S.project.activeFile)) S.openTabs.push(S.project.activeFile);
+    }
+    renderFileTree(); renderTabs();
+    if (S.project.activeFile) activateFile(S.project.activeFile);
+    ProjectStore.save();
+  }
+
+  function renameFile(oldName, newName) {
+    if (!newName || newName === oldName) return;
+    if (S.project.files[newName]) { Log.warn(`File "${newName}" exists`); return; }
+    S.project.files[newName] = S.project.files[oldName];
+    S.project.blocklyStates[newName] = S.project.blocklyStates[oldName];
+    delete S.project.files[oldName];
+    delete S.project.blocklyStates[oldName];
+    S.openTabs = S.openTabs.map(t => t === oldName ? newName : t);
+    if (S.project.activeFile === oldName) S.project.activeFile = newName;
+    renderFileTree(); renderTabs();
+    if (S.project.activeFile) activateFile(S.project.activeFile);
+    ProjectStore.save();
+  }
+
+  function openTab(name) {
+    if (!S.openTabs.includes(name)) S.openTabs.push(name);
+    activateFile(name);
+  }
+
+  function closeTab(name) {
+    S.openTabs = S.openTabs.filter(t => t !== name);
+    if (S.project.activeFile === name) S.project.activeFile = S.openTabs[S.openTabs.length - 1] || null;
+    renderTabs();
+    if (S.project.activeFile) activateFile(S.project.activeFile);
+  }
+
+  function renderFileTree() {
+    const L = Html.LT;
+    const files = Object.keys(S.project.files).sort();
+    fileTreeEl.innerHTML = files.map(n => {
+      const isActive = n === S.project.activeFile;
+      const icon = n.endsWith('.js') ? '📄' : '📋';
+      return `${L}div class="file-item ${isActive ? 'active' : ''}" data-file="${n}">
+        ${L}span class="fi-icon">${icon}${L}/span>
+        ${L}span class="fi-name">${n}${L}/span>
+        ${L}div class="fi-actions">
+          ${L}button class="fi-btn" data-action="rename" data-file="${n}">✎${L}/button>
+          ${L}button class="fi-btn" data-action="delete" data-file="${n}">✕${L}/button>
+        ${L}/div>
+      ${L}/div>`;
+    }).join('');
+  }
+
+  function renderTabs() {
+    const L = Html.LT;
+    tabsEl.innerHTML = S.openTabs.map(n => {
+      const isActive = n === S.project.activeFile;
+      return `${L}div class="ed-tab ${isActive ? 'active' : ''}" data-file="${n}">${n}${L}span class="tab-close" data-file="${n}">✕${L}/span>${L}/div>`;
+    }).join('');
+  }
+
+  // Writes the currently-active editor's content back into project.files
+  // (and, if in Blocks view, snapshots the Blockly XML state too).
+  function flushActiveFile() {
+    const name = S.project.activeFile;
+    if (!name) return;
+    if (S.activeView === 'code') {
+      S.project.files[name] = codeEditorEl.value;
+    } else {
+      const xmlText = BlocklySetup.serializeToXmlText();
+      if (xmlText !== null) S.project.blocklyStates[name] = xmlText;
+      const generated = BlocklySetup.generateCode();
+      if (generated && generated.trim()) S.project.files[name] = generated;
+    }
+  }
+
+  function activateFile(name) {
+    if (!name) return;
+    flushActiveFile();
+    S.project.activeFile = name;
+    renderFileTree(); renderTabs();
+    codeEditorEl.value = S.project.files[name] || '';
+    BlocklySetup.loadFromXmlText(S.project.blocklyStates[name]);
+    ViewSwitcher.refresh();
+  }
+
+  function getAllFilesConcatenated() {
+    flushActiveFile();
+    const names = Object.keys(S.project.files).sort((a, b) => a === 'main.js' ? -1 : b === 'main.js' ? 1 : a.localeCompare(b));
+    return names.map(n => `\n// ── ${n} ──\n${S.project.files[n] || ''}`).join('\n');
+  }
+
+  return {
+    init, createFile, deleteFile, renameFile, openTab, closeTab,
+    renderFileTree, renderTabs, flushActiveFile, activateFile, getAllFilesConcatenated,
+    getCodeEditor: () => codeEditorEl
+  };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: ViewSwitcher — toggles Blocks/Code panes
+   ════════════════════════════════════════════════════════════════ */
+const ViewSwitcher = (() => {
+  const S = ProjectStore.state;
+
+  function init() {
+    document.querySelectorAll('.vs-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTo(btn.dataset.view));
+    });
+  }
+
+  function switchTo(view) {
+    S.activeView = view;
+    document.querySelectorAll('.vs-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+    (view === 'blocks' ? Dom.$('blockly-pane') : Dom.$('code-pane')).classList.add('active');
+    refresh();
+  }
+
+  // Re-syncs the visible pane's content from the current source of truth.
+  function refresh() {
+    if (S.activeView === 'code' && S.project.activeFile) {
+      const code = BlocklySetup.generateCode();
+      FileManager.getCodeEditor().value = code.trim() || S.project.files[S.project.activeFile] || '';
+    }
+    if (S.activeView === 'blocks') setTimeout(() => BlocklySetup.resize(), 50);
+  }
+
+  return { init, switchTo, refresh };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: Autocomplete — inline code-editor autocomplete
+   ════════════════════════════════════════════════════════════════ */
+const Autocomplete = (() => {
+  let acDiv, codeEditorEl;
+  let items = [], selectedIndex = -1;
+
+  function init() {
+    acDiv = Dom.$('autocomplete');
+    codeEditorEl = Dom.$('code-editor');
+    codeEditorEl.addEventListener('input', () => show(currentWord()));
+    codeEditorEl.addEventListener('keydown', onKeydown);
+    codeEditorEl.addEventListener('blur', () => setTimeout(hide, 150));
+  }
+
+  function currentWord() {
+    const pos = codeEditorEl.selectionStart, val = codeEditorEl.value;
+    let start = pos;
+    while (start > 0 && /[\w.]/.test(val[start - 1])) start--;
+    return val.slice(start, pos);
+  }
+
+  function show(word) {
+    if (!word || word.length < 2) { hide(); return; }
+    items = ApiCatalog.search(word, 10);
+    if (!items.length) { hide(); return; }
+    selectedIndex = -1;
+    const L = Html.LT;
+    acDiv.innerHTML = items.map((it, i) =>
+      `${L}div class="ac-item" data-i="${i}">
+        ${L}span class="ac-badge" style="background:${it.color}22;color:${it.color}">${it.catLabel}${L}/span>
+        ${L}span style="color:var(--text);font-size:13px;font-weight:700">${it.name}${L}/span>
+        ${L}span class="ac-desc">${it.desc}${L}/span>
+      ${L}/div>`
+    ).join('');
+    const rect = codeEditorEl.getBoundingClientRect();
+    acDiv.style.left = (rect.left + 60) + 'px';
+    acDiv.style.top = (rect.top + 50) + 'px';
+    acDiv.classList.add('open');
+    acDiv.querySelectorAll('.ac-item').forEach((el, i) => el.addEventListener('mousedown', e => { e.preventDefault(); apply(i); }));
+  }
+
+  function hide() { acDiv.classList.remove('open'); items = []; selectedIndex = -1; }
+
+  function apply(i) {
+    const it = items[i];
+    const pos = codeEditorEl.selectionStart, val = codeEditorEl.value;
+    let start = pos;
+    while (start > 0 && /[\w.]/.test(val[start - 1])) start--;
+    codeEditorEl.value = val.slice(0, start) + it.snippet + val.slice(pos);
+    codeEditorEl.selectionStart = codeEditorEl.selectionEnd = start + it.snippet.length;
+    hide();
+    const S = ProjectStore.state;
+    if (S.project.activeFile) S.project.files[S.project.activeFile] = codeEditorEl.value;
+  }
+
+  function highlight() {
+    acDiv.querySelectorAll('.ac-item').forEach((el, i) => el.classList.toggle('sel', i === selectedIndex));
+  }
+
+  function onKeydown(e) {
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); selectedIndex = Math.min(selectedIndex + 1, items.length - 1); highlight(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIndex = Math.max(selectedIndex - 1, 0); highlight(); }
+    else if ((e.key === 'Enter' || e.key === 'Tab') && selectedIndex >= 0) { e.preventDefault(); apply(selectedIndex); }
+    else if (e.key === 'Escape') hide();
+  }
+
+  return { init };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: ApiSearch — header search box: insert block or snippet
+   ════════════════════════════════════════════════════════════════ */
+const ApiSearch = (() => {
+  let inputEl, resultsEl;
+
+  function init() {
+    inputEl = Dom.$('api-search');
+    resultsEl = Dom.$('api-search-results');
+    inputEl.addEventListener('input', onInput);
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#api-search-wrap')) resultsEl.classList.remove('open');
+    });
+  }
+
+  function onInput() {
+    const q = inputEl.value.trim();
+    if (!q) { resultsEl.classList.remove('open'); return; }
+    const hits = ApiCatalog.search(q, 8);
+    if (!hits.length) { resultsEl.classList.remove('open'); return; }
+    const L = Html.LT;
+    resultsEl.innerHTML = hits.map(it =>
+      `${L}div class="sr-item" data-snippet="${encodeURIComponent(it.snippet)}" data-name="${it.name}">
+        ${L}div style="display:flex;align-items:center;gap:6px">
+          ${L}span class="sr-name">${it.name}${L}/span>
+          ${L}span class="sr-cat-badge" style="background:${it.color}22;color:${it.color}">${it.catLabel}${L}/span>
+        ${L}/div>
+        ${L}div class="sr-sig">${it.sig}${L}/div>
+        ${L}div class="sr-desc">${it.desc}${L}/div>
+      ${L}/div>`
+    ).join('');
+    resultsEl.classList.add('open');
+    resultsEl.querySelectorAll('.sr-item').forEach(el => el.addEventListener('mousedown', onPick));
+  }
+
+  function onPick(e) {
+    e.preventDefault();
+    const el = e.currentTarget;
+    const snippet = decodeURIComponent(el.dataset.snippet);
+    const name = el.dataset.name;
+    const S = ProjectStore.state;
+    const codeEditorEl = FileManager.getCodeEditor();
+
+    if (S.activeView === 'code') {
+      const pos = codeEditorEl.selectionStart || codeEditorEl.value.length;
+      codeEditorEl.value = codeEditorEl.value.slice(0, pos) + snippet + '\n' + codeEditorEl.value.slice(pos);
+      if (S.project.activeFile) S.project.files[S.project.activeFile] = codeEditorEl.value;
+      Log.info(`Inserted: ${name}`);
+    } else {
+      try {
+        const blockType = ApiCatalog.blockTypeFor(name);
+        const blk = BlocklySetup.newBlockAt(blockType);
+        if (blk) Log.info(`Added block: ${name}`);
+      } catch (err) {
+        Log.warn(`Switch to Code view to insert "${name}"`);
+      }
+    }
+    inputEl.value = '';
+    resultsEl.classList.remove('open');
+  }
+
+  return { init };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: GameRuntime — sandboxed iframe + Phaser bootstrap
+   ════════════════════════════════════════════════════════════════ */
+const GameRuntime = (() => {
+  const S = ProjectStore.state;
+  let phaserMount, gameEmpty, gameIframe = null, blobUrl = null;
+
+  function init() {
+    phaserMount = Dom.$('phaser-mount');
+    gameEmpty = Dom.$('game-empty');
+    window.addEventListener('message', onMessage);
+  }
+
+  // NOTE: this whole inner document is assembled from small string parts.
+  // No literal HTML tag text appears anywhere in this file's source outside
+  // the real page markup at the very top — not even inside comments. Some
+  // hosts (notably Google Apps Script's HtmlService, via
+  // createHtmlOutputFromFile) run their own HTML tokenizer over the entire
+  // file before serving it, and that tokenizer reacts to any tag-shaped text
+  // it finds anywhere in the raw source, comments included, not just live
+  // markup or executable strings. Building every tag at runtime by
+  // concatenating single characters keeps any such sequence out of the
+  // source file entirely.
+  function tag(name, attrs) { return '<' + name + (attrs ? ' ' + attrs : '') + '>'; }
+  function closeTag(name) { return '<' + '/' + name + '>'; }
+
+  function buildGameHtml(code) {
+    const inner = `(function(){
+      var _code=${JSON.stringify(code)};
+      var _o={log:console.log,error:console.error,warn:console.warn};
+      function _p(l,a){try{window.parent.postMessage({type:'console',level:l,msg:Array.from(a).join(' ')},'*');}catch(e){}}
+      console.log=function(){_p('log',arguments);_o.log.apply(console,arguments)};
+      console.error=function(){_p('error',arguments);_o.error.apply(console,arguments)};
+      console.warn=function(){_p('warn',arguments);_o.warn.apply(console,arguments)};
+      window.onerror=function(m,s,l,c,e){_p('error',['Uncaught: '+m+(l?' (line '+l+')':'')]);return true};
+      var _pre=null,_crt=null,_upd=null;
+      try{
+        var _f=new Function('Phaser',_code+'\\n;return{preload:typeof preload!=="undefined"?preload:null,create:typeof create!=="undefined"?create:null,update:typeof update!=="undefined"?update:null};');
+        var _e=_f(Phaser);
+        _pre=_e.preload;_crt=_e.create;_upd=_e.update;
+      }catch(e){console.error('Compile error: '+e.message)}
+      try{
+        new Phaser.Game({
+          type:Phaser.AUTO,width:${S.settings.previewWidth},height:${S.settings.previewHeight},
+          backgroundColor:'#bbdefb',
+          physics:{default:'arcade',arcade:{gravity:{y:300},debug:false}},
+          scene:{
+            preload:function(){if(_pre)try{_pre.call(this)}catch(e){console.error('preload: '+e.message)}},
+            create:function(){if(_crt)try{_crt.call(this)}catch(e){console.error('create: '+e.message)}},
+            update:function(t,d){if(_upd)try{_upd.call(this,t,d)}catch(e){}}
+          },
+          parent:document.body,
+          scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH}
+        });
+      }catch(e){console.error('Game error: '+e.message)}
+    })();`;
+
+    return [
+      '<' + '!DOCTYPE html>',
+      tag('html'), tag('head'), tag('meta', 'charset="UTF-8"'),
+      tag('style'), '*{margin:0;padding:0}body{overflow:hidden}canvas{display:block}', closeTag('style'),
+      tag('script', 'src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"'), closeTag('script'),
+      closeTag('head'),
+      tag('body'),
+      tag('script'), inner, closeTag('script'),
+      closeTag('body'), closeTag('html')
+    ].join('');
+  }
+
+  function run() {
+    stop();
+    const code = FileManager.getAllFilesConcatenated();
+    Log.info('▶ Launching…');
+    const html = buildGameHtml(code);
+    const blob = new Blob([html], { type: 'text/html' });
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
+    blobUrl = URL.createObjectURL(blob);
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;';
+    iframe.allow = 'autoplay';
+    iframe.src = blobUrl;
+    phaserMount.appendChild(iframe);
+    gameIframe = iframe;
+
+    gameEmpty.style.display = 'none';
+    Log.setStatus('run');
+  }
+
+  function stop() {
+    if (gameIframe) { gameIframe.remove(); gameIframe = null; }
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+    phaserMount.innerHTML = '';
+    gameEmpty.style.display = 'flex';
+    Log.setStatus('stopped');
+  }
+
+  function onMessage(e) {
+    if (e.data && e.data.type === 'console') {
+      const level = e.data.level === 'error' ? 'e' : e.data.level === 'warn' ? 'w' : '';
+      Log.write(e.data.msg, level);
+      if (e.data.level === 'error') Log.setStatus('err');
+    }
+  }
+
+  function updatePreviewSize(w, h) {
+    S.settings.previewWidth = w;
+    S.settings.previewHeight = h;
+  }
+
+  return { init, run, stop, updatePreviewSize };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: ProjectIO — zip export / import
+   ════════════════════════════════════════════════════════════════ */
+const ProjectIO = (() => {
+  const S = ProjectStore.state;
+
+  async function exportProject() {
+    FileManager.flushActiveFile();
+    const zip = new JSZip();
+    zip.file('_project.json', JSON.stringify({ name: S.project.name, blocklyStates: S.project.blocklyStates }, null, 2));
+    Object.entries(S.project.files).forEach(([name, content]) => zip.file(name, content || ''));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (S.project.name || 'game').replace(/\s+/g, '_') + '.zip';
+    a.click();
+    Log.info('💾 Saved: ' + a.download);
+  }
+
+  async function importProject(file) {
+    if (file.name.endsWith('.zip')) {
+      const zip = await JSZip.loadAsync(file);
+      const newProject = { name: 'Imported', files: {}, blocklyStates: {} };
+      const meta = zip.file('_project.json');
+      if (meta) {
+        try {
+          const d = JSON.parse(await meta.async('string'));
+          newProject.name = d.name || 'Imported';
+          newProject.blocklyStates = d.blocklyStates || {};
+        } catch (e) { /* corrupt metadata; proceed with defaults */ }
+      }
+      for (const [path, entry] of Object.entries(zip.files)) {
+        if (path === '_project.json' || entry.dir) continue;
+        newProject.files[path] = await entry.async('string');
+      }
+      ProjectStore.replaceProject(newProject);
+      FileManager.renderFileTree();
+      FileManager.renderTabs();
+      FileManager.activateFile(S.project.activeFile);
+      Log.info('📂 Imported: ' + S.project.name);
+    } else if (file.name.endsWith('.js')) {
+      const reader = new FileReader();
+      reader.onload = e => FileManager.createFile(file.name, e.target.result);
+      reader.readAsText(file);
+    } else {
+      Log.warn('Only .zip or .js files');
+    }
+  }
+
+  return { exportProject, importProject };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: UI — modals, settings, header buttons, keybindings, theme
+   ════════════════════════════════════════════════════════════════ */
+const UI = (() => {
+  const S = ProjectStore.state;
+  const THEME_VARS = {
+    dark: { '--bg': '#0a0a14', '--panel': '#12121e', '--surface': '#1a1a2e', '--surface2': '#24243a', '--border': '#2a2a42', '--border2': '#3a3a5a', '--text': '#e8e8f5', '--muted': '#6a6a8a', '--dim': '#1a1a2a' },
+    light: { '--bg': '#f5f5ff', '--panel': '#eef0ff', '--surface': '#e2e4ff', '--surface2': '#cdcfff', '--border': '#b8bad8', '--border2': '#9a9cc0', '--text': '#1a1a3a', '--muted': '#555577', '--dim': '#d0d2e8' }
+  };
+
+  function openModal(id) { Dom.$(id).classList.add('open'); }
+  function closeModal(id) { Dom.$(id).classList.remove('open'); }
+
+  function applyTheme(name) {
+    const vars = THEME_VARS[name] || THEME_VARS.light;
+    Object.entries(vars).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+  }
+
+  function wireModals() {
+    document.querySelectorAll('.modal-bg').forEach(bg => {
+      bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
+    });
+
+    Dom.$('btn-add-file').addEventListener('click', () => openModal('modal-new-file'));
+    Dom.$('new-file-cancel').addEventListener('click', () => closeModal('modal-new-file'));
+    Dom.$('new-file-ok').addEventListener('click', () => {
+      let name = Dom.$('new-file-name').value.trim();
+      if (!name) return;
+      if (!name.includes('.')) name += '.js';
+      const tmpl = Dom.$('new-file-type').value === 'scene' ? ProjectStore.SCENE_TEMPLATE : ProjectStore.JS_TEMPLATE;
+      FileManager.createFile(name, tmpl);
+      closeModal('modal-new-file');
+      Dom.$('new-file-name').value = 'main.js';
+    });
+
+    Dom.$('btn-new-project').addEventListener('click', () => openModal('modal-new-project'));
+    Dom.$('new-proj-cancel').addEventListener('click', () => closeModal('modal-new-project'));
+    Dom.$('new-proj-ok').addEventListener('click', () => {
+      const name = Dom.$('new-proj-name').value.trim() || 'My Game';
+      GameRuntime.stop();
+      ProjectStore.newProject(name);
+      BlocklySetup.clear();
+      FileManager.renderFileTree(); FileManager.renderTabs(); FileManager.activateFile('main.js');
+      closeModal('modal-new-project');
+      Log.info('🆕 New game: ' + name);
+    });
+
+    Dom.$('btn-settings').addEventListener('click', () => openModal('modal-settings'));
+    Dom.$('settings-close').addEventListener('click', () => {
+      const [w, h] = Dom.$('preview-size-select').value.split('x').map(Number);
+      GameRuntime.updatePreviewSize(w, h);
+      Dom.$('game-frame').style.width = w + 'px';
+      Dom.$('game-frame').style.height = h + 'px';
+      Dom.$('preview-size').textContent = `${w} × ${h}`;
+      ProjectStore.save();
+      closeModal('modal-settings');
+    });
+
+    Dom.$('theme-select').addEventListener('change', function () {
+      S.settings.theme = this.value;
+      applyTheme(this.value);
+      ProjectStore.save();
+    });
+
+    Dom.$('btn-tutorial').addEventListener('click', () => openModal('modal-tutorial'));
+    Dom.$('tutorial-close').addEventListener('click', () => closeModal('modal-tutorial'));
+  }
+
+  function wireHeaderButtons() {
+    Dom.$('btn-run').addEventListener('click', GameRuntime.run);
+    Dom.$('btn-stop').addEventListener('click', GameRuntime.stop);
+    Dom.$('console-clear').addEventListener('click', Log.clear);
+    Dom.$('toggle-console').addEventListener('click', function () {
+      const area = Dom.$('preview-area');
+      area.classList.toggle('hidden-console');
+      this.textContent = area.classList.contains('hidden-console') ? '▼ show' : '▲ hide';
+    });
+    Dom.$('btn-export').addEventListener('click', ProjectIO.exportProject);
+    Dom.$('btn-import').addEventListener('click', () => Dom.$('import-input').click());
+    Dom.$('import-input').addEventListener('change', e => {
+      if (e.target.files[0]) ProjectIO.importProject(e.target.files[0]);
+      e.target.value = '';
+    });
+  }
+
+  function wireKeybindings() {
+    document.addEventListener('keydown', e => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === 'Enter') { e.preventDefault(); GameRuntime.run(); }
+      else if (mod && e.key === 's') { e.preventDefault(); ProjectStore.save(); Log.info('💾 Saved'); }
+      else if (mod && e.key === '.') { e.preventDefault(); GameRuntime.stop(); }
+    });
+  }
+
+  function applyStoredSettingsToDom() {
+    Dom.$('game-frame').style.width = S.settings.previewWidth + 'px';
+    Dom.$('game-frame').style.height = S.settings.previewHeight + 'px';
+    Dom.$('preview-size').textContent = `${S.settings.previewWidth} × ${S.settings.previewHeight}`;
+    if (S.settings.theme === 'dark') {
+      Dom.$('theme-select').value = 'dark';
+      applyTheme('dark');
+    }
+  }
+
+  function maybeShowFirstRunTutorial() {
+    if (!localStorage.getItem('blockgame_kid_seen_tutorial')) {
+      setTimeout(() => openModal('modal-tutorial'), 800);
+      localStorage.setItem('blockgame_kid_seen_tutorial', '1');
+    }
+  }
+
+  function init() {
+    wireModals();
+    wireHeaderButtons();
+    wireKeybindings();
+    applyStoredSettingsToDom();
+  }
+
+  return { init, maybeShowFirstRunTutorial };
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   MODULE: App — composition root; loads deps then boots everything
+   ════════════════════════════════════════════════════════════════ */
+const App = (() => {
+  const DEPENDENCIES = [
+    'https://unpkg.com/blockly@10.4.3/blockly.min.js',
+    'https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js',
+    'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
+  ];
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function showLoadError(title, message) {
+    const L = Html.LT;
+    Dom.$('loading').innerHTML =
+      `${L}div style="color:var(--pink);font-size:22px;">❌ ${title}${L}/div>
+       ${L}div style="color:var(--muted);font-size:14px;">${message}${L}/div>
+       ${L}button onclick="location.reload()" style="background:var(--accent);color:#fff;border:none;padding:12px 24px;border-radius:12px;cursor:pointer;font-weight:700;">Retry${L}/button>`;
+  }
+
+  function boot() {
+    try {
+      Log.init();
+      ProjectStore.load() || null; // attempt load; ensureNonEmpty() covers the failure case
+      ProjectStore.ensureNonEmpty();
+
+      FileManager.init();
+      ViewSwitcher.init();
+      Autocomplete.init();
+      ApiSearch.init();
+      GameRuntime.init();
+      UI.init();
+
+      BlocklySetup.init(() => {
+        // Workspace changed while in Blocks view: mirror into project state.
+        const S = ProjectStore.state;
+        if (S.project.activeFile && S.activeView === 'blocks') {
+          const xmlText = BlocklySetup.serializeToXmlText();
+          if (xmlText !== null) S.project.blocklyStates[S.project.activeFile] = xmlText;
+          const generated = BlocklySetup.generateCode();
+          if (generated && generated.trim()) S.project.files[S.project.activeFile] = generated;
+        }
+      });
+
+      FileManager.renderFileTree();
+      FileManager.renderTabs();
+      FileManager.activateFile(ProjectStore.state.project.activeFile);
+      ViewSwitcher.switchTo('blocks');
+
+      ProjectStore.startAutosave(3000);
+
+      Log.success('🚀 Ready!');
+      Log.info('🧩 Drag blocks, press ▶ Play');
+
+      UI.maybeShowFirstRunTutorial();
+    } catch (e) {
+      showLoadError('Start error', e.message);
+      console.error(e);
+    }
+  }
+
+  function init() {
+    Promise.all(DEPENDENCIES.map(loadScript))
+      .then(() => {
+        Dom.$('loading').classList.add('done');
+        Dom.$('app').style.display = 'grid';
+        boot();
+      })
+      .catch(err => showLoadError('Failed to load', err.message));
+  }
+
+  return { init };
+})();
+
+App.init();
+</script>
+</body>
+</html>
