@@ -473,6 +473,20 @@ const ProjectStore = (() => {
 const BlocklySetup = (() => {
   let workspace = null;
 
+  // The script-tag build of Blockly 10.x exposes the JS generator as
+  // Blockly.JavaScript. Newer builds (11+) moved it to a separate global,
+  // javascript.javascriptGenerator, and only some versions keep the old
+  // name as a compatibility alias. This file is pinned to 10.4.3 (which
+  // has Blockly.JavaScript), but resolving it once here — instead of
+  // hardcoding the reference at every call site — means a future version
+  // bump only needs this one line changed, not every generator call below.
+  function resolveJsGenerator() {
+    if (typeof Blockly !== 'undefined' && Blockly.JavaScript) return Blockly.JavaScript;
+    if (typeof javascript !== 'undefined' && javascript.javascriptGenerator) return javascript.javascriptGenerator;
+    throw new Error('Blockly JavaScript generator not found — check the Blockly script tags loaded correctly.');
+  }
+  const JS = () => resolveJsGenerator();
+
   function registerCatalogBlocks() {
     ApiCatalog.groups.forEach(g => {
       g.items.forEach(item => {
@@ -488,7 +502,7 @@ const BlocklySetup = (() => {
             this.setNextStatement(true, null);
           }
         };
-        Blockly.JavaScript.forBlock[btype] = () => item.snippet + '\n';
+        JS().forBlock[btype] = () => item.snippet + '\n';
       });
     });
   }
@@ -512,8 +526,8 @@ const BlocklySetup = (() => {
           this.setNextStatement(true, null);
         }
       };
-      Blockly.JavaScript.forBlock[w.type] = block => {
-        const inner = Blockly.JavaScript.statementToCode(block, w.body);
+      JS().forBlock[w.type] = block => {
+        const inner = JS().statementToCode(block, w.body);
         switch (w.type) {
           case 'gc': return `function create(){${inner}}\n`;
           case 'gu': return `function update(time,delta){${inner}}\n`;
@@ -538,8 +552,8 @@ const BlocklySetup = (() => {
         this.setNextStatement(true, null);
       }
     };
-    Blockly.JavaScript.forBlock['vs'] = block => {
-      const v = Blockly.JavaScript.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
+    JS().forBlock['vs'] = block => {
+      const v = JS().nameDB_.getName(block.getFieldValue('VAR'), Blockly.Names.NameType.VARIABLE);
       return `${v}=${block.getFieldValue('VALUE')};\n`;
     };
 
@@ -551,7 +565,7 @@ const BlocklySetup = (() => {
         this.setNextStatement(true, null);
       }
     };
-    Blockly.JavaScript.forBlock['clog'] = block => `console.log('${block.getFieldValue('MSG')}');\n`;
+    JS().forBlock['clog'] = block => `console.log('${block.getFieldValue('MSG')}');\n`;
 
     Blockly.Blocks['com'] = {
       init() {
@@ -561,7 +575,7 @@ const BlocklySetup = (() => {
         this.setNextStatement(true, null);
       }
     };
-    Blockly.JavaScript.forBlock['com'] = block => `// ${block.getFieldValue('TEXT')}\n`;
+    JS().forBlock['com'] = block => `// ${block.getFieldValue('TEXT')}\n`;
   }
 
   // Builds one XML-ish element as a string without ever writing a literal
@@ -655,7 +669,7 @@ const BlocklySetup = (() => {
     } catch (e) { return null; }
   }
   function generateCode() {
-    try { return Blockly.JavaScript.workspaceToCode(workspace); } catch (e) { return ''; }
+    try { return JS().workspaceToCode(workspace); } catch (e) { return ''; }
   }
   function newBlockAt(blockType, x = 60, y = 60) {
     if (!workspace) return null;
