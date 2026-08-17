@@ -60,12 +60,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .vs-btn{font-family:var(--font);font-weight:700;font-size:13px;letter-spacing:.03em;padding:6px 16px;border-radius:var(--radius);border:2px solid transparent;cursor:pointer;background:none;color:var(--muted);transition:.15s}
 .vs-btn.active{background:var(--surface2);color:var(--accent);border-color:var(--border2);box-shadow:0 2px 6px rgba(0,0,0,0.06)}
 .vs-btn:hover:not(.active){color:var(--text)}
-#api-search-wrap{margin-left:auto;position:relative;display:flex;align-items:center;gap:5px}
+#api-search-wrap{margin-left:auto;position:relative;display:flex;align-items:center;gap:5px;min-width:0}
 #api-search{background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--mono);font-size:13px;padding:6px 12px 6px 32px;width:200px;outline:none;transition:border-color .2s}
 #api-search:focus{border-color:var(--accent)}
 #api-search-icon{position:absolute;left:10px;color:var(--muted);font-size:16px;pointer-events:none}
-#api-search-results{position:absolute;top:calc(100%+8px);right:0;width:360px;background:var(--surface);border:2px solid var(--border2);border-radius:var(--radius-lg);box-shadow:0 16px 48px rgba(0,0,0,0.3);z-index:500;overflow:hidden;display:none;max-height:300px;overflow-y:auto}
+/* Anchored to the wrap's right edge like before, but clamped so it can
+   never exceed the viewport width or spill past the editor column — it
+   was previously a fixed 360px hanging off a ~200px-wide anchor that
+   isn't near the right edge of the window, so it ran off-screen. */
+#api-search-results{position:absolute;top:calc(100%+8px);right:0;width:min(360px,calc(100vw - 32px));max-width:400px;background:var(--surface);border:2px solid var(--border2);border-radius:var(--radius-lg);box-shadow:0 16px 48px rgba(0,0,0,0.3);z-index:500;overflow:hidden;display:none;max-height:300px;overflow-y:auto}
 #api-search-results.open{display:block}
+@media(max-width:768px){#api-search-results{position:fixed;left:12px;right:12px;top:auto;width:auto}}
 .sr-item{padding:8px 14px;cursor:pointer;display:flex;flex-direction:column;gap:3px;border-bottom:2px solid var(--border);transition:background .1s}
 .sr-item:last-child{border:none}
 .sr-item:hover{background:var(--surface2)}
@@ -1267,8 +1272,21 @@ const UI = (() => {
    MODULE: App — composition root; loads deps then boots everything
    ════════════════════════════════════════════════════════════════ */
 const App = (() => {
-  const DEPENDENCIES = [
-    'https://unpkg.com/blockly@10.4.3/blockly.min.js',
+  // Blockly does NOT ship a single "blockly.min.js" global bundle on unpkg —
+  // that path 404s / throws "Cannot read properties of undefined (reading 'Msg')"
+  // because it's the UMD package entry meant for bundlers, not a script tag.
+  // The documented script-tag path is 4 files, loaded IN ORDER (each one
+  // defines globals the next one needs): core, built-in blocks, the JS
+  // generator, then the English message table. This is what actually
+  // populates window.Blockly with .Blocks / .JavaScript / .Themes / etc.
+  const BLOCKLY_SEQUENTIAL_DEPENDENCIES = [
+    'https://unpkg.com/blockly@10.4.3/blockly_compressed.js',
+    'https://unpkg.com/blockly@10.4.3/blocks_compressed.js',
+    'https://unpkg.com/blockly@10.4.3/javascript_compressed.js',
+    'https://unpkg.com/blockly@10.4.3/msg/en.js'
+  ];
+  // These don't depend on load order relative to each other or to Blockly.
+  const PARALLEL_DEPENDENCIES = [
     'https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js',
     'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
   ];
@@ -1278,9 +1296,19 @@ const App = (() => {
       const s = document.createElement('script');
       s.src = src;
       s.onload = resolve;
-      s.onerror = reject;
+      s.onerror = () => reject(new Error(`Failed to load ${src}`));
       document.head.appendChild(s);
     });
+  }
+
+  // Loads an array of scripts strictly one after another (each must finish
+  // before the next starts), because later files assume globals the
+  // earlier ones defined.
+  function loadScriptsInOrder(srcs) {
+    return srcs.reduce(
+      (chain, src) => chain.then(() => loadScript(src)),
+      Promise.resolve()
+    );
   }
 
   function showLoadError(title, message) {
@@ -1333,7 +1361,10 @@ const App = (() => {
   }
 
   function init() {
-    Promise.all(DEPENDENCIES.map(loadScript))
+    Promise.all([
+      loadScriptsInOrder(BLOCKLY_SEQUENTIAL_DEPENDENCIES),
+      ...PARALLEL_DEPENDENCIES.map(loadScript)
+    ])
       .then(() => {
         Dom.$('loading').classList.add('done');
         Dom.$('app').style.display = 'grid';
