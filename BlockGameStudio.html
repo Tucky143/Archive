@@ -1327,10 +1327,18 @@ const App = (() => {
 
   function showLoadError(title, message) {
     const L = Html.LT;
-    Dom.$('loading').innerHTML =
+    const errorHtml =
       `${L}div style="color:var(--pink);font-size:22px;">❌ ${title}${L}/div>
        ${L}div style="color:var(--muted);font-size:14px;">${message}${L}/div>
        ${L}button onclick="location.reload()" style="background:var(--accent);color:#fff;border:none;padding:12px 24px;border-radius:12px;cursor:pointer;font-weight:700;">Retry${L}/button>`;
+    // boot() runs AFTER #loading is already hidden and #app is already
+    // shown (see init() below), so if boot() throws, writing only into
+    // #loading is invisible — the user sees a silent, blank-looking app
+    // with no clue why. Un-hide #loading and re-show it on top so any
+    // boot-time error is always visible, no matter how far startup got.
+    const loadingEl = Dom.$('loading');
+    loadingEl.classList.remove('done');
+    loadingEl.innerHTML = errorHtml;
   }
 
   function boot() {
