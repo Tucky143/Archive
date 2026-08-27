@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <base href="https://cdn.jsdelivr.net/gh/Reeyuki/PlagueIncEvolved/" />
+    <title>Plague Inc</title>
+
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: black;
+      }
+
+      #unity-canvas {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+
+      #loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: #0b0b0b;
+        color: white;
+        font-family: sans-serif;
+      }
+
+      #bar {
+        width: 60%;
+        height: 12px;
+        background: #333;
+      }
+
+      #fill {
+        height: 100%;
+        width: 0%;
+        background: #4caf50;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="loader">
+      <div id="text">0 MB / ? MB</div>
+      <div id="bar">
+        <div id="fill"></div>
+      </div>
+    </div>
+
+    <canvas id="unity-canvas"></canvas>
+
+    <script>
+      const baseBuild = "https://cdn.jsdelivr.net/gh/Reeyuki/PlagueIncEvolved/Build/";
+      const base = "https://cdn.jsdelivr.net/gh/Reeyuki/PlagueIncEvolved/";
+
+      const MAX_RETRIES = 3;
+      const RETRY_DELAY_MS = 1000;
+      const MAX_PARTS = 128;
+
+      // File descriptors – parts will be discovered dynamically
+      const files = {
+        wasm: { name: "6b69ec426bff8a6bd4e760a1d5f507b9.wasm", isParts: true },
+        data: { name: "3719aa6c33bf126ed64864ee5fc2fafc.data", isParts: true },
+        framework: { name: "b4b58f3ff6d98fbfb83482e25e0e9a5c.framework.js", isParts: false },
+        loader: { name: "bb0d9ecdb05db3e84da20bd14a4f84dc.loader.js", isParts: false }
+      };
+
+      function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+      // Head request with retries
+      async function headWithRetry(url, retries = MAX_RETRIES) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            const res = await fetch(url, { method: "HEAD" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res;
+          } catch (e) {
+            if (attempt < retries) {
+              await sleep(RETRY_DELAY_MS * (attempt + 1));
+            } else {
+              throw new Error(`HEAD failed for ${url}: ${e.message}`);
+            }
+          }
+        }
+      }
+
+      // Discover all existing parts for a split file
+      async function discoverParts(file) {
+        const base = baseBuild + file.name;
+        const parts = [];
+        for (let i = 0; i < MAX_PARTS; i++) {
+          const partUrl = base + ".part" + String(i).padStart(2, "0");
+          try {
+            const res = await headWithRetry(partUrl);
+            const len = parseInt(res.headers.get("content-length") || "0", 10);
+            parts.push({ url: partUrl, size: isNaN(len) ? 0 : len });
+          } catch {
+            break; // no more parts
+          }
+        }
+        if (parts.length === 0) {
+          throw new Error(`No parts found for ${file.name}`);
+        }
+        return parts;
+      }
+
+      // Get info for a single file (not split)
+      async function discoverSingle(file) {
+        const url = baseBuild + file.name;
+        const res = await headWithRetry(url);
+        const len = parseInt(res.headers.get("content-length") || "0", 10);
+        return { url, size: isNaN(len) ? 0 : len };
+      }
+
+      // Fetch a single file with progress
+      async function fetchSingle(info, onBytes) {
+        const res = await fetch(info.url);
+        if (!res.ok) throw new Error(`Failed to fetch ${info.url}: HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        onBytes(buf.byteLength);
+        return buf;
+      }
+
+      // Fetch one part with streaming progress and retries
+      async function fetchPart(info, onBytes, retries = MAX_RETRIES) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            const res = await fetch(info.url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const reader = res.body.getReader();
+            const chunks = [];
+            let received = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              received += value.byteLength;
+              onBytes(value.byteLength);
+            }
+            const out = new Uint8Array(received);
+            let off = 0;
+            for (const c of chunks) { out.set(c, off); off += c.byteLength; }
+            return out.buffer;
+          } catch (e) {
+            if (attempt < retries) {
+              await sleep(RETRY_DELAY_MS * (attempt + 1));
+            } else {
+              throw new Error(`Failed after ${retries+1} attempts for ${info.url}: ${e.message}`);
+            }
+          }
+        }
+      }
+
+      async function boot() {
+        const statusText = document.getElementById("text");
+        const fill = document.getElementById("fill");
+
+        // 1. Discover all files / parts
+        statusText.textContent = "Checking files...";
+        const discoveryTasks = [];
+
+        for (const [key, file] of Object.entries(files)) {
+          if (file.isParts) {
+            discoveryTasks.push(discoverParts(file).then(parts => ({ key, parts, single: null })));
+          } else {
+            discoveryTasks.push(discoverSingle(file).then(info => ({ key, parts: null, single: info })));
+          }
+        }
+        const discoveries = await Promise.all(discoveryTasks);
+
+        // Build a map: key -> array of {url, size} (for parts) or single info
+        const fileInfos = {};
+        let totalBytes = 0;
+        for (const d of discoveries) {
+          if (d.parts) {
+            fileInfos[d.key] = { parts: d.parts, single: null };
+            for (const p of d.parts) totalBytes += p.size;
+          } else {
+            fileInfos[d.key] = { parts: null, single: d.single };
+            totalBytes += d.single.size;
+          }
+        }
+
+        const totalMB = (totalBytes / 1024 / 1024).toFixed(0);
+        statusText.textContent = `0 MB / ${totalMB} MB`;
+
+        // 2. Start downloading everything in parallel
+        let loadedBytes = 0;
+        const updateUI = () => {
+          const frac = Math.min(loadedBytes / totalBytes, 1);
+          fill.style.width = (frac * 100) + "%";
+          const mb = (loadedBytes / 1024 / 1024).toFixed(1);
+          statusText.textContent = `${mb} MB / ${totalMB} MB`;
+        };
+
+        const fetchTasks = [];
+
+        for (const [key, info] of Object.entries(fileInfos)) {
+          if (info.parts) {
+            for (const part of info.parts) {
+              fetchTasks.push(fetchPart(part, (n) => { loadedBytes += n; updateUI(); }));
+            }
+          } else if (info.single) {
+            fetchTasks.push(fetchSingle(info.single, (n) => { loadedBytes += n; updateUI(); }));
+          }
+        }
+
+        const buffers = await Promise.all(fetchTasks);
+
+        // 3. Reassemble parts for wasm and data
+        const fileBuffers = {};
+        let idx = 0;
+        for (const [key, info] of Object.entries(fileInfos)) {
+          if (info.parts) {
+            const count = info.parts.length;
+            const partsBufs = buffers.slice(idx, idx + count);
+            idx += count;
+            const total = partsBufs.reduce((sum, buf) => sum + buf.byteLength, 0);
+            const out = new Uint8Array(total);
+            let off = 0;
+            for (const buf of partsBufs) {
+              out.set(new Uint8Array(buf), off);
+              off += buf.byteLength;
+            }
+            fileBuffers[key] = out.buffer;
+          } else if (info.single) {
+            fileBuffers[key] = buffers[idx++];
+          }
+        }
+
+        // 4. Create blob URLs
+        const wasmUrl = URL.createObjectURL(new Blob([fileBuffers.wasm], { type: "application/wasm" }));
+        const dataUrl = URL.createObjectURL(new Blob([fileBuffers.data]));
+        const frameworkUrl = URL.createObjectURL(new Blob([fileBuffers.framework], { type: "text/javascript" }));
+        const loaderUrl = URL.createObjectURL(new Blob([fileBuffers.loader], { type: "text/javascript" }));
+
+        // 5. Load the loader script dynamically
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = loaderUrl;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error("Failed to load loader script"));
+          document.body.appendChild(script);
+        });
+
+        // 6. Start Unity
+        document.getElementById("loader").style.display = "none";
+
+        const unityInstance = await createUnityInstance(
+          document.querySelector("#unity-canvas"),
+          {
+            dataUrl: dataUrl,
+            frameworkUrl: frameworkUrl,
+            codeUrl: wasmUrl,
+            streamingAssetsUrl: base + "StreamingAssets",
+            companyName: "Ndemic Creations",
+            productName: "Plague Inc",
+            productVersion: "1.18.3.2"
+          }
+        );
+
+        // Clean up blob URLs after a moment
+        setTimeout(() => {
+          URL.revokeObjectURL(wasmUrl);
+          URL.revokeObjectURL(dataUrl);
+          URL.revokeObjectURL(frameworkUrl);
+          URL.revokeObjectURL(loaderUrl);
+        }, 10000);
+
+        // Fullscreen on F key
+        window.addEventListener("keydown", (e) => {
+          if ((e.key === "F" || e.key === "f") && (e.target === document.body || e.target === canvas)) {
+            unityInstance.SetFullscreen(1);
+          }
+        });
+      }
+
+      boot().catch((err) => {
+        document.getElementById("text").textContent = "Error: " + err.message;
+        console.error(err);
+      });
+    </script>
+  </body>
+</html>

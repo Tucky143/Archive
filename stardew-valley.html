@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stardew Valley</title>
+    <link rel="icon" href="data:," />
+    <base
+      href="https://cdn.jsdelivr.net/gh/degloved-net/stardew-wasm@master/"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      #loading {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font: 1.5rem/1 sans-serif;
+        z-index: 1;
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+        padding: 1rem;
+      }
+      #loading.hidden {
+        display: none;
+      }
+      #loading .progress {
+        font-size: 0.9rem;
+        opacity: 0.7;
+      }
+      #music-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 1.1rem;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        backdrop-filter: blur(4px);
+        transition: opacity 0.5s;
+      }
+      #music-checkbox.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #music-checkbox input[type="checkbox"] {
+        width: 1.2rem;
+        height: 1.2rem;
+        accent-color: #ffb347;
+        cursor: pointer;
+      }
+      #music-checkbox label {
+        cursor: pointer;
+        user-select: none;
+      }
+      #music-checkbox .countdown {
+        font-size: 0.8rem;
+        opacity: 0.6;
+        margin-left: 0.5rem;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading">
+      <div id="status">Initializing…</div>
+      <div class="progress" id="progress"></div>
+      <div id="music-checkbox">
+        <input type="checkbox" id="music-toggle" checked />
+        <label for="music-toggle">Enable music</label>
+        <span class="countdown" id="countdown">(3s)</span>
+      </div>
+    </div>
+    <script>
+      // Force credentials to be omitted for all fetches (CDN doesn't need them)
+      const originalFetch = window.fetch;
+      window.fetch = function (resource, options = {}) {
+        options.credentials = "omit";
+        return originalFetch(resource, options);
+      };
+
+      // OPFS polyfill using IndexedDB (already present, kept as-is)
+      (function() {
+        var originalGetDirectory = navigator.storage && navigator.storage.getDirectory
+          ? navigator.storage.getDirectory.bind(navigator.storage) : null;
+
+        function openIDB() {
+          return new Promise(function(resolve, reject) {
+            var req = indexedDB.open("stardew-opfs-polyfill", 1);
+            req.onupgradeneeded = function() { req.result.createObjectStore("files"); };
+            req.onsuccess = function() { resolve(req.result); };
+            req.onerror = function() { reject(req.error); };
+          });
+        }
+
+        var idbPromise = null;
+        function getIDB() {
+          if (!idbPromise) idbPromise = openIDB();
+          return idbPromise;
+        }
+
+        function idbGet(db, key) {
+          return new Promise(function(resolve, reject) {
+            var tx = db.transaction("files", "readonly");
+            var req = tx.objectStore("files").get(key);
+            req.onsuccess = function() { resolve(req.result); };
+            req.onerror = function() { reject(req.error); };
+          });
+        }
+
+        function idbPut(db, key, val) {
+          return new Promise(function(resolve, reject) {
+            var tx = db.transaction("files", "readwrite");
+            tx.objectStore("files").put(val, key);
+            tx.oncomplete = function() { resolve(); };
+            tx.onabort = tx.onerror = function() {
+              reject(tx.error || new DOMException("IndexedDB write failed", "UnknownError"));
+            };
+          });
+        }
+
+        function makeWritable(db, name) {
+          var chunks = [];
+          return {
+            write: function(data) { chunks.push(data instanceof Uint8Array ? data.slice() : new Uint8Array(data)); return Promise.resolve(); },
+            close: function() {
+              var total = 0;
+              chunks.forEach(function(c) { total += c.length; });
+              var merged = new Uint8Array(total);
+              var off = 0;
+              chunks.forEach(function(c) { merged.set(c, off); off += c.length; });
+              return idbPut(db, name, merged);
+            }
+          };
+        }
+
+        function makeFakeRoot(db) {
+          return {
+            getFileHandle: function(name, opts) {
+              if (opts && opts.create) {
+                return Promise.resolve({
+                  getFile: function() {
+                    return idbGet(db, name).then(function(data) {
+                      return new Blob([data || new Uint8Array(0)]);
+                    });
+                  },
+                  createWritable: function() { return Promise.resolve(makeWritable(db, name)); }
+                });
+              }
+              return idbGet(db, name).then(function(data) {
+                if (data === undefined) throw new DOMException("Not found", "NotFoundError");
+                return {
+                  getFile: function() { return Promise.resolve(new Blob([data])); },
+                  createWritable: function() { return Promise.resolve(makeWritable(db, name)); }
+                };
+              });
+            }
+          };
+        }
+
+        if (navigator.storage) {
+          navigator.storage.getDirectory = function() {
+            if (originalGetDirectory) {
+              return originalGetDirectory().catch(function() {
+                return getIDB().then(makeFakeRoot);
+              });
+            }
+            return getIDB().then(makeFakeRoot);
+          };
+        }
+      })();
+    </script>
+
+    <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <script>
+(async () => {
+const BASE = document.querySelector("base").href;
+const loading = document.getElementById("loading");
+const statusEl = document.getElementById("status");
+const progressEl = document.getElementById("progress");
+const canvas = document.getElementById("canvas");
+const musicCheckbox = document.getElementById("music-checkbox");
+const musicToggle = document.getElementById("music-toggle");
+const countdownEl = document.getElementById("countdown");
+
+const storage = await navigator.storage.getDirectory();
+void navigator.storage.persist?.().catch(() => false);
+
+async function storageHas(name) {
+  try { await storage.getFileHandle(name); return true; } catch { return false; }
+}
+async function storageRead(name) {
+  return new Uint8Array(await (await (await storage.getFileHandle(name)).getFile()).arrayBuffer());
+}
+async function storageWrite(name, data) {
+  const w = await (await storage.getFileHandle(name, { create: true })).createWritable();
+  await w.write(data); await w.close();
+}
+
+async function fetchChunkCount(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch ${url}: HTTP ${response.status}`);
+  const text = (await response.text()).trim();
+  if (!/^\d+$/.test(text) || Number(text) < 1)
+    throw new Error(`Invalid chunk count in ${url}: ${JSON.stringify(text)}`);
+  return Number(text);
+}
+
+// Downloads a set of numbered chunks in parallel, concatenates them, returns Uint8Array.
+async function downloadTar(base, label, progressCallback) {
+  const count = await fetchChunkCount(base + ".count");
+  const urls = Array.from({ length: count }, (_, i) => `${base}${String(i).padStart(2, "0")}`);
+  const responses = await Promise.all(urls.map(url => fetch(url)));
+  for (const res of responses) {
+    if (!res.ok) throw new Error(`Failed to fetch ${res.url}: HTTP ${res.status}`);
+  }
+  const buffers = await Promise.all(responses.map(res => res.arrayBuffer()));
+  const total = buffers.reduce((acc, buf) => acc + buf.byteLength, 0);
+  const tar = new Uint8Array(total);
+  let off = 0;
+  for (const buf of buffers) {
+    tar.set(new Uint8Array(buf), off);
+    off += buf.byteLength;
+    if (progressCallback) progressCallback(off, total, label);
+  }
+  return tar;
+}
+
+// Cached download: read from storage if present, else download and cache.
+async function getTar(base, label, key, progressCallback) {
+  try {
+    statusEl.textContent = `Loading cached ${label}…`;
+    return await storageRead(key);
+  } catch {
+    const tar = await downloadTar(base, label, progressCallback);
+    try {
+      statusEl.textContent = `Caching ${label}…`;
+      await storageWrite(key, tar);
+    } catch {}
+    return tar;
+  }
+}
+
+// --- Show checkbox with countdown, start loading content & runtime immediately ---
+let totalDownloaded = 0;
+let totalSize = 0;
+function updateProgress(loaded, total, label) {
+  totalDownloaded += loaded - (totalSize || 0);
+  totalSize = total;
+  const mb = (totalDownloaded / 1048576).toFixed(1);
+  progressEl.textContent = `${mb} MB downloaded`;
+}
+
+// Content tar (always needed)
+const contentP = getTar(
+  BASE + "Content.tar",
+  "game content",
+  "Content.tar",
+  (loaded, total) => updateProgress(loaded, total, "content")
+);
+
+// Runtime (WASM + .NET) – load in parallel with content
+const runtimeP = (async () => {
+  const { dotnet } = await import(BASE + "_framework/dotnet.js");
+  return dotnet
+    .withModuleConfig({ canvas })
+    .withEnvironmentVariable("MONO_SLEEP_ABORT_LIMIT", "99999")
+    .withRuntimeOptions([
+      `--jiterpreter-minimum-trace-hit-count=${500}`,
+      `--jiterpreter-trace-monitoring-period=${100}`,
+      `--jiterpreter-trace-monitoring-max-average-penalty=${150}`,
+      `--jiterpreter-wasm-bytes-limit=${64 * 1024 * 1024}`,
+      `--jiterpreter-table-size=${32 * 1024}`,
+    ])
+    .withResourceLoader((type, _name, defaultUri, _integrity, behavior) => {
+      if (type === "dotnetwasm" && behavior === "dotnetwasm") {
+        // Fetch all WASM chunks in parallel, then return a single Response.
+        return (async () => {
+          const count = await fetchChunkCount(defaultUri + ".count");
+          const urls = Array.from({ length: count }, (_, i) => `${defaultUri}${i}`);
+          const responses = await Promise.all(urls.map(url => fetch(url)));
+          for (const res of responses) {
+            if (!res.ok) throw new Error(`Failed to fetch ${res.url}: HTTP ${res.status}`);
+          }
+          const buffers = await Promise.all(responses.map(res => res.arrayBuffer()));
+          const total = buffers.reduce((acc, buf) => acc + buf.byteLength, 0);
+          const data = new Uint8Array(total);
+          let off = 0;
+          for (const buf of buffers) {
+            data.set(new Uint8Array(buf), off);
+            off += buf.byteLength;
+          }
+          return new Response(new ReadableStream({
+            start(controller) {
+              controller.enqueue(data);
+              controller.close();
+            }
+          }), { headers: { "Content-Type": "application/wasm" } });
+        })();
+      }
+      return undefined;
+    })
+    .create();
+})();
+
+// Wait for checkbox decision (max 3 seconds)
+const checkboxDecision = new Promise((resolve) => {
+  let remaining = 3;
+  const interval = setInterval(() => {
+    remaining -= 1;
+    countdownEl.textContent = `(${remaining}s)`;
+    if (remaining <= 0) {
+      clearInterval(interval);
+      musicCheckbox.classList.add("hidden");
+      resolve(musicToggle.checked);
+    }
+  }, 1000);
+  // Also allow immediate hide if user clicks the checkbox (optional)
+  // but we still wait the full 3 seconds unless we want to allow early start?
+  // The requirement says it disappears after 3 seconds, so we keep that.
+});
+
+const wantMusic = await checkboxDecision;
+
+// Now start audio download only if the user wants music
+const audioP = wantMusic
+  ? getTar(
+      BASE + "ContentAudio.tar",
+      "music",
+      "ContentAudio.tar",
+      (loaded, total) => updateProgress(loaded, total, "music")
+    )
+  : Promise.resolve(null);
+
+// Wait for everything to be ready.
+const [contentTar, audioTar, runtime] = await Promise.all([contentP, audioP, runtimeP]);
+const exports = await runtime.getAssemblyExports(runtime.getConfig().mainAssemblyName);
+
+// --- Helper: parse and extract tar into the virtual filesystem ---
+function parseTar(tar) {
+  if (!(tar instanceof Uint8Array)) throw new TypeError("Tar archive isn't a Uint8Array");
+  const entries = [];
+  const paths = new Set();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const readString = (buf, offset, length) => {
+    let end = offset;
+    while (end < offset + length && buf[end] !== 0) end++;
+    return decoder.decode(buf.subarray(offset, end));
+  };
+  const readOctal = (buf, offset, length, field) => {
+    const value = readString(buf, offset, length).trim();
+    if (!/^[0-7]+$/.test(value)) throw new Error(`Invalid tar ${field}: ${JSON.stringify(value)}`);
+    const parsed = Number.parseInt(value, 8);
+    if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`Tar ${field} is out of range`);
+    return parsed;
+  };
+  let pos = 0;
+  let foundEnd = false;
+  while (pos + 512 <= tar.length) {
+    const header = tar.subarray(pos, pos + 512);
+    if (header.every((value) => value === 0)) {
+      foundEnd = true;
+      break;
+    }
+    const storedChecksum = readOctal(header, 148, 8, "checksum");
+    let actualChecksum = 0;
+    for (let index = 0; index < 512; index++)
+      actualChecksum += index >= 148 && index < 156 ? 32 : header[index];
+    if (storedChecksum !== actualChecksum) throw new Error(`Tar checksum mismatch at byte ${pos}`);
+    const name = readString(header, 0, 100);
+    const headerPrefix = readString(header, 345, 155);
+    const fullName = headerPrefix ? `${headerPrefix}/${name}` : name;
+    const size = readOctal(header, 124, 12, "size");
+    const type = header[156];
+    const isFile = type === 0 || type === 48;
+    const isDirectory = type === 53;
+    if (!isFile && !isDirectory) throw new Error(`Unsupported tar entry type ${type} for ${fullName}`);
+    if (isDirectory && size !== 0) throw new Error(`Tar directory has data: ${fullName}`);
+    if (isFile && fullName.endsWith("/")) throw new Error(`Tar file has a directory path: ${fullName}`);
+    const path = fullName.endsWith("/") ? fullName.slice(0, -1) : fullName;
+    const segments = path.split("/");
+    if (!path || path.startsWith("/") || path.includes("\\") ||
+        segments.some((segment) => !segment || segment === "." || segment === ".."))
+      throw new Error(`Unsafe tar path: ${JSON.stringify(fullName)}`);
+    if (paths.has(path)) throw new Error(`Duplicate tar path: ${JSON.stringify(path)}`);
+    paths.add(path);
+    const dataStart = pos + 512;
+    const dataEnd = dataStart + size;
+    const next = dataStart + Math.ceil(size / 512) * 512;
+    if (!Number.isSafeInteger(next) || dataEnd > tar.length || next > tar.length)
+      throw new Error(`Truncated tar entry: ${fullName}`);
+    entries.push({ fullName: path, isDirectory, dataStart, dataEnd });
+    pos = next;
+  }
+  if (!foundEnd) throw new Error("Tar archive has no complete end marker");
+  for (let index = pos; index < tar.length; index++)
+    if (tar[index] !== 0) throw new Error("Tar archive contains data after its end marker");
+  return entries;
+}
+
+function extractTar(tar, prefix) {
+  const entries = parseTar(tar);
+  let count = 0;
+  for (const entry of entries) {
+    const target = entry.fullName.startsWith("__prefs__/")
+      ? "/libsdl/saves/" + entry.fullName.slice("__prefs__/".length)
+      : prefix + entry.fullName;
+    if (entry.isDirectory) {
+      exports.WasmBootstrap.CreateContentDirectory(target);
+    } else {
+      exports.WasmBootstrap.WriteContentFile(target, tar.subarray(entry.dataStart, entry.dataEnd));
+      count++;
+    }
+  }
+  return count;
+}
+
+// --- Bring up the runtime and extract assets ---
+statusEl.textContent = "Starting runtime…";
+await runtime.runMain();
+await exports.WasmBootstrap.PreInit();
+
+// Restore saved data if present
+try {
+  const savesTar = await storageRead("Saves.tar");
+  exports.WasmBootstrap.CreateContentDirectory("/libsdl/saves/Saves");
+  extractTar(savesTar, "/libsdl/saves/Saves/");
+} catch (error) {
+  if (error?.name !== "NotFoundError") console.error("Couldn't restore Saves.tar:", error);
+}
+try {
+  const preferencesTar = await storageRead("DevicePreferences.tar");
+  extractTar(preferencesTar, "/libsdl/saves/");
+} catch (error) {
+  if (error?.name !== "NotFoundError") console.error("Couldn't restore DevicePreferences.tar:", error);
+}
+
+statusEl.textContent = "Extracting game files…";
+extractTar(contentTar, "/libsdl/");
+if (audioTar) {
+  statusEl.textContent = "Extracting music…";
+  extractTar(audioTar, "/libsdl/");
+}
+
+statusEl.textContent = "Ready!";
+loading.classList.add("hidden");
+
+const dpr = window.devicePixelRatio || 1;
+const w = Math.round(canvas.clientWidth * dpr) || 1280;
+const h = Math.round(canvas.clientHeight * dpr) || 720;
+await exports.WasmBootstrap.Init(w, h);
+
+new ResizeObserver(() => {
+  const dpr = window.devicePixelRatio || 1;
+  const nw = Math.round(canvas.clientWidth * dpr);
+  const nh = Math.round(canvas.clientHeight * dpr);
+  if (nw > 0 && nh > 0) try { exports.WasmBootstrap.Resize(nw, nh); } catch {}
+}).observe(canvas);
+
+try { void navigator.keyboard?.lock().catch(() => {}); } catch {}
+document.addEventListener("keydown", (e) => {
+  if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Tab"].includes(e.code))
+    e.preventDefault();
+});
+
+try {
+  await exports.WasmBootstrap.MainLoop();
+} catch (error) {
+  if (error !== "unwind" && error?.message !== "unwind") throw error;
+}
+})();
+    </script>
+  </body>
+</html>
